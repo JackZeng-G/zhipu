@@ -1,13 +1,17 @@
 package main
 
 import (
+	"io/fs"
 	"log"
+	"net/http"
 	"os"
+	"strings"
 
 	"personal-kb/internal/api"
 	"personal-kb/internal/nas"
 	"personal-kb/internal/ollama"
 	"personal-kb/internal/store"
+	"personal-kb/web"
 
 	"github.com/gin-gonic/gin"
 )
@@ -81,6 +85,32 @@ func main() {
 	// Health check
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
+	})
+
+	// Serve embedded frontend static files with SPA fallback
+	distFS, err := fs.Sub(web.DistFS, "dist")
+	if err != nil {
+		log.Fatalf("failed to create sub filesystem for static assets: %v", err)
+	}
+	fileServer := http.FileServer(http.FS(distFS))
+
+	r.NoRoute(func(c *gin.Context) {
+		path := c.Request.URL.Path
+		// Skip API routes — let them return 404 naturally
+		if strings.HasPrefix(path, "/api") {
+			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			return
+		}
+		// Try to serve the static file
+		f, err := distFS.Open(strings.TrimPrefix(path, "/"))
+		if err == nil {
+			f.Close()
+			fileServer.ServeHTTP(c.Writer, c.Request)
+			return
+		}
+		// SPA fallback: serve index.html for all non-file routes
+		c.Request.URL.Path = "/"
+		fileServer.ServeHTTP(c.Writer, c.Request)
 	})
 
 	addr := ":" + envOrDefault("KB_PORT", "8080")

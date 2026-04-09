@@ -1,0 +1,8 @@
+bin/
+*.exe
+*.db
+*.db-journal
+web/node_modules/
+web/dist/
+.env
+tmp/
