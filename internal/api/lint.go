@@ -184,8 +184,7 @@ func (h *Handlers) RunLint(c *gin.Context) {
 		}
 	}
 
-	// Check 7: Content hash mismatch
-	notes, _ = h.notesStore.ListNotes(ctx, "", 0, 10000)
+	// Check 7: Content hash mismatch (reuse notes already loaded above)
 	for _, note := range notes {
 		if note.ContentHash == "" {
 			continue
