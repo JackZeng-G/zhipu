@@ -241,6 +241,11 @@ func SetupRouter(h *Handlers) *gin.Engine {
 			api.GET("/wiki/entities", h.ListEntities)
 			api.POST("/wiki/auto", h.AutoGenerateWiki)
 
+		// Questions endpoints
+		api.POST("/questions", h.CreateQuestion)
+		api.GET("/questions", h.ListQuestions)
+		api.PUT("/questions/:id/resolve", h.ResolveQuestion)
+
 		// Lint & Knowledge health
 		api.GET("/ai/lint", h.RunLint)
 		api.POST("/ai/lint/fix", h.FixLintIssues)
