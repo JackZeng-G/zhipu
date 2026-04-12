@@ -27,6 +27,7 @@ type Note struct {
 	CreatedTime   int64   `db:"created_time" json:"created_time"`
 	ModifiedTime  int64   `db:"modified_time" json:"modified_time"`
 	SyncedAt      *int64  `db:"synced_at" json:"synced_at"`
+	ContentHash   string  `db:"content_hash" json:"content_hash"`
 }
 
 // NotesStore provides CRUD for notes and notebooks.
@@ -98,11 +99,39 @@ func (s *NotesStore) DeleteNote(ctx context.Context, id string) error {
 	return nil
 }
 
+// CountNotes returns the total number of notes, optionally filtered by notebook.
+func (s *NotesStore) CountNotes(ctx context.Context, notebookID string) (int, error) {
+	var count int
+	var err error
+	if notebookID != "" {
+		err = s.db.GetContext(ctx, &count, "SELECT COUNT(*) FROM notes WHERE notebook_id = ?", notebookID)
+	} else {
+		err = s.db.GetContext(ctx, &count, "SELECT COUNT(*) FROM notes")
+	}
+	if err != nil {
+		return 0, fmt.Errorf("count notes: %w", err)
+	}
+	return count, nil
+}
+
 // ListNotebooks returns all notebooks.
 func (s *NotesStore) ListNotebooks(ctx context.Context) ([]Notebook, error) {
 	var notebooks []Notebook
 	if err := s.db.SelectContext(ctx, &notebooks, "SELECT * FROM notebooks ORDER BY title"); err != nil {
 		return nil, fmt.Errorf("list notebooks: %w", err)
+	}
+	return notebooks, nil
+}
+
+// ListNotebooksWithNotes returns only notebooks that contain at least one note.
+func (s *NotesStore) ListNotebooksWithNotes(ctx context.Context) ([]Notebook, error) {
+	var notebooks []Notebook
+	if err := s.db.SelectContext(ctx, &notebooks, `
+		SELECT DISTINCT n.* FROM notebooks n
+		INNER JOIN notes ne ON ne.notebook_id = n.id
+		ORDER BY n.title
+	`); err != nil {
+		return nil, fmt.Errorf("list notebooks with notes: %w", err)
 	}
 	return notebooks, nil
 }
