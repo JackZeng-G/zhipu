@@ -221,6 +221,10 @@ func SetupRouter(h *Handlers) *gin.Engine {
 			ai.POST("/conversations", h.CreateConversation)
 			ai.DELETE("/conversations/:id", h.DeleteConversation)
 			ai.POST("/conversations/:id/messages", h.SendMessage)
+			ai.POST("/query", h.RunQuery)
+			ai.GET("/outputs", h.ListOutputs)
+			ai.GET("/outputs/:slug", h.GetOutput)
+			ai.DELETE("/outputs/:slug", h.DeleteOutput)
 		}
 
 		// Notes detail endpoints
