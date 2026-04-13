@@ -136,6 +136,17 @@ function evolutionActionLabel(action: string): string {
   return labels[action] || action
 }
 
+// Summarize evolution log: group source_added into one line, keep semantic entries
+const evolutionSummary = computed(() => {
+  const entries = parseEvolutionLog(store.currentConcept?.evolution_log || '[]')
+  if (entries.length === 0) return null
+
+  const sourceAddedCount = entries.filter(e => e.action === 'source_added').length
+  const semanticEntries = entries.filter(e => e.action && e.action !== 'source_added')
+
+  return { sourceAddedCount, semanticEntries }
+})
+
 // === Filter state ===
 const minSourceCount = ref(2)
 const minEdgeWeight = ref(1)
@@ -442,15 +453,18 @@ watch(() => route.params.slug, (slug) => {
                   <strong>发现分歧：</strong>{{ store.currentConcept.contradictions }}
                 </div>
                 <!-- Evolution Log -->
-                <div v-if="store.currentConcept.evolution_log && store.currentConcept.evolution_log !== '[]'" class="evolution-section">
-                  <h4 class="evolution-title">Evolution Log</h4>
+                <div v-if="evolutionSummary && (evolutionSummary.sourceAddedCount > 0 || evolutionSummary.semanticEntries.length > 0)" class="evolution-section">
+                  <h4 class="evolution-title">演变记录</h4>
                   <div class="evolution-entries">
-                    <template v-for="(entry, idx) in parseEvolutionLog(store.currentConcept.evolution_log)" :key="idx">
-                      <div class="evolution-entry" :class="'evolution-' + (entry.action || 'unknown')">
-                        <span class="evolution-action">{{ evolutionActionLabel(entry.action) }}</span>
-                        <span class="evolution-detail">{{ entry.detail || '' }}</span>
-                      </div>
-                    </template>
+                    <div v-if="evolutionSummary.sourceAddedCount > 0" class="evolution-entry evolution-source_added">
+                      <span class="evolution-action">{{ evolutionSummary.sourceAddedCount }} 个来源</span>
+                      <span class="evolution-detail">已关联笔记</span>
+                    </div>
+                    <div v-for="(entry, idx) in evolutionSummary.semanticEntries" :key="idx"
+                      class="evolution-entry" :class="'evolution-' + (entry.action || 'unknown')">
+                      <span class="evolution-action">{{ evolutionActionLabel(entry.action) }}</span>
+                      <span class="evolution-detail">{{ entry.detail || '' }}</span>
+                    </div>
                   </div>
                 </div>
                 <div class="markdown-content" v-html="renderMarkdown(store.currentConcept.content)" />
