@@ -9,7 +9,7 @@ import (
 
 // Open creates a connection to the SQLite database at the given path.
 func Open(path string) (*sqlx.DB, error) {
-	db, err := sqlx.Open("sqlite", path+"?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)")
+	db, err := sqlx.Open("sqlite", path+"?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
 	if err != nil {
 		return nil, fmt.Errorf("open database %s: %w", path, err)
 	}
