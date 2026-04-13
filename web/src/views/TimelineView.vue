@@ -74,6 +74,41 @@ const reflectPolling = ref(false)
 // --- Merge ---
 const mergeCandidates = ref<any[]>([])
 
+// ==================== Computed ====================
+
+// Filter reflect-related activities for REFLECT tab
+const reflectActivities = computed(() => {
+  return activities.value
+    .filter((a: any) => ['reflect', 'query_persist', 'merge', 'confirm_confidence'].includes(a.activity_type))
+    .sort((a: any, b: any) => b.created_at - a.created_at)
+})
+
+// Group lint issues by type for better display
+const lintIssueGroups = computed(() => {
+  if (!lintResult.value?.issues) return null
+  const groups: Record<string, any[]> = {}
+  for (const issue of lintResult.value.issues) {
+    const type = issue.type || 'unknown'
+    if (!groups[type]) groups[type] = []
+    groups[type].push(issue)
+  }
+  return groups
+})
+
+function lintTypeLabel(type: string): string {
+  const labels: Record<string, string> = {
+    no_entities: '无实体',
+    no_relations: '无关联',
+    stale_summary: '过期摘要',
+    popular_entity: '热门实体',
+    stub_concept: '空概念',
+    stale_concept: '过期概念',
+    orphan_concept: '孤立概念',
+    content_hash_mismatch: '内容变更'
+  }
+  return labels[type] || type
+}
+
 // ==================== Existing functions ====================
 
 async function handleFullLint() {
@@ -137,66 +172,87 @@ const activityLabels: Record<string, string> = {
   build_relations: '关联分析',
   chat_insight: '洞察',
   ingest: '知识吸收',
-  lint_fix: '修复'
+  lint_fix: '修复',
+  reflect: 'REFLECT',
+  query_persist: 'QUERY 保存',
+  merge: '概念合并',
+  confirm_confidence: '置信度确认',
+  question_match: '问题匹配',
+  add_question: '添加问题',
+  resolve_question: '问题解决',
+  gap_analysis: '差距分析'
 }
 
-// Merge index + ingest activities by target_id into single rows
+// Build all activities into rows (index+ingest merged, others shown directly)
 const tableData = computed<RowData[]>(() => {
   const merged = new Map<string, RowData>()
+  const otherRows: RowData[] = []
 
   for (const act of activities.value) {
-    if (act.activity_type !== 'index' && act.activity_type !== 'ingest' && act.activity_type !== 'auto_index') {
-      continue
-    }
+    const label = activityLabels[act.activity_type] || act.activity_type
 
-    const key = act.target_id || act.description
-    const existing = merged.get(key)
+    // Merge index + ingest activities by target_id
+    if (act.activity_type === 'index' || act.activity_type === 'ingest' || act.activity_type === 'auto_index') {
+      const key = act.target_id || act.description
+      const existing = merged.get(key)
 
-    if (act.activity_type === 'index' || act.activity_type === 'auto_index') {
-      const parts = act.description.split(': ')
-      const noteName = parts.length > 1 ? (parts[1] || act.description) : act.description
+      if (act.activity_type === 'index' || act.activity_type === 'auto_index') {
+        const parts = act.description.split(': ')
+        const noteName = parts.length > 1 ? (parts[1] || act.description) : act.description
 
-      if (existing) {
-        existing.noteName = noteName
-        existing.time = formatTime(act.created_at)
-        existing.timestamp = act.created_at
-      } else {
-        merged.set(key, {
-          id: act.id,
-          noteId: act.target_id || '',
-          noteName: noteName,
-          conceptCount: 0,
-          activityType: activityLabels[act.activity_type] || act.activity_type,
-          time: formatTime(act.created_at),
-          timestamp: act.created_at
-        })
+        if (existing) {
+          existing.noteName = noteName
+          existing.time = formatTime(act.created_at)
+          existing.timestamp = act.created_at
+        } else {
+          merged.set(key, {
+            id: act.id,
+            noteId: act.target_id || '',
+            noteName: noteName,
+            conceptCount: 0,
+            activityType: label,
+            time: formatTime(act.created_at),
+            timestamp: act.created_at
+          })
+        }
+      } else if (act.activity_type === 'ingest') {
+        const match = act.description.match(/updated (\d+) concepts/)
+        const count = match && match[1] ? parseInt(match[1]) : 0
+
+        if (existing) {
+          existing.conceptCount = count
+        } else {
+          merged.set(key, {
+            id: act.id,
+            noteId: act.target_id || '',
+            noteName: act.target_id || act.description,
+            conceptCount: count,
+            activityType: '索引',
+            time: formatTime(act.created_at),
+            timestamp: act.created_at
+          })
+        }
       }
-    } else if (act.activity_type === 'ingest') {
-      const match = act.description.match(/updated (\d+) concepts/)
-      const count = match && match[1] ? parseInt(match[1]) : 0
-
-      if (existing) {
-        existing.conceptCount = count
-      } else {
-        merged.set(key, {
-          id: act.id,
-          noteId: act.target_id || '',
-          noteName: act.target_id || act.description,
-          conceptCount: count,
-          activityType: '索引',
-          time: formatTime(act.created_at),
-          timestamp: act.created_at
-        })
-      }
+    } else {
+      // Show all other activities directly (reflect, merge, query, etc.)
+      otherRows.push({
+        id: act.id,
+        noteId: act.target_id || '',
+        noteName: act.description,
+        conceptCount: 0,
+        activityType: label,
+        time: formatTime(act.created_at),
+        timestamp: act.created_at
+      })
     }
   }
 
-  return Array.from(merged.values()).sort((a, b) => b.timestamp - a.timestamp)
+  return [...otherRows, ...Array.from(merged.values())].sort((a, b) => b.timestamp - a.timestamp)
 })
 
 const columns: DataTableColumns<RowData> = [
   {
-    title: '笔记名称',
+    title: '活动',
     key: 'noteName',
     ellipsis: { tooltip: true },
     render(row) {
@@ -204,9 +260,17 @@ const columns: DataTableColumns<RowData> = [
     }
   },
   {
+    title: '类型',
+    key: 'activityType',
+    width: 120,
+    render(row) {
+      return row.activityType
+    }
+  },
+  {
     title: '概念数',
     key: 'conceptCount',
-    width: 100,
+    width: 80,
     render(row) {
       if (row.conceptCount > 0) {
         return row.conceptCount
@@ -246,7 +310,8 @@ function formatTime(ts: number) {
 }
 
 function handleRowClick(row: RowData) {
-  if (row.noteId) {
+  // Only navigate to note for index-related activities
+  if (row.noteId && ['索引', '自动索引', '知识吸收'].includes(row.activityType)) {
     router.push({ path: '/', query: { note: row.noteId } })
   }
 }
@@ -638,7 +703,17 @@ onMounted(() => {
           <div v-if="reflectRunning" class="reflect-status">
             <NSpin size="small" /> REFLECT 四阶段流水线正在运行，请等待...
           </div>
-          <NEmpty v-else description="点击上方按钮启动 REFLECT 分析" />
+
+          <!-- REFLECT history from activity log -->
+          <div v-if="reflectActivities.length > 0" class="reflect-history">
+            <h4 style="margin: 0 0 8px; color: var(--color-text-primary);">REFLECT 历史</h4>
+            <div v-for="act in reflectActivities" :key="act.id" class="reflect-entry">
+              <span class="reflect-time">{{ formatTime(act.created_at) }}</span>
+              <span class="reflect-desc">{{ act.description }}</span>
+            </div>
+          </div>
+
+          <NEmpty v-if="!reflectRunning && reflectActivities.length === 0" description="点击上方按钮启动 REFLECT 分析" />
         </NSpace>
       </NTabPane>
 
@@ -675,18 +750,27 @@ onMounted(() => {
 
           <!-- Issues detail list -->
           <div v-if="lintResult && lintResult.issues && lintResult.issues.length > 0" class="issues-section">
-            <h4 style="margin: 0 0 8px; color: var(--color-text-primary);">问题列表</h4>
-            <NList bordered>
-              <NListItem v-for="(issue, idx) in lintResult.issues" :key="idx">
-                <NThing :title="issue.type || issue.check" :description="issue.message || issue.detail">
-                  <template #header-extra>
-                    <NTag :type="issue.severity === 'error' ? 'error' : 'warning'" size="small">
-                      {{ issue.severity || 'warning' }}
-                    </NTag>
-                  </template>
-                </NThing>
-              </NListItem>
-            </NList>
+            <h4 style="margin: 0 0 8px; color: var(--color-text-primary);">
+              问题列表 ({{ lintResult.issues.length }})
+            </h4>
+            <div class="issue-groups" v-if="lintIssueGroups">
+              <div v-for="(issues, type) in lintIssueGroups" :key="type" class="issue-group">
+                <div class="issue-group-header">
+                  <NTag :type="issues[0]?.severity === 'error' ? 'error' : issues[0]?.severity === 'warning' ? 'warning' : 'info'" size="small">
+                    {{ lintTypeLabel(type) }}
+                  </NTag>
+                  <span class="issue-group-count">{{ issues.length }} 项</span>
+                </div>
+                <div v-for="(issue, idx) in issues.slice(0, 5)" :key="idx" class="issue-item">
+                  <span class="issue-title">{{ issue.title }}</span>
+                  <span class="issue-desc">{{ issue.description }}</span>
+                  <span class="issue-suggestion" v-if="issue.suggestion">→ {{ issue.suggestion }}</span>
+                </div>
+                <div v-if="issues.length > 5" class="issue-more">
+                  ...还有 {{ issues.length - 5 }} 项
+                </div>
+              </div>
+            </div>
           </div>
 
           <NEmpty v-if="lintResult && (!lintResult.issues || lintResult.issues.length === 0) && !linting" description="所有检查通过，知识库状态良好" />
@@ -786,8 +870,90 @@ onMounted(() => {
   font-size: 14px;
 }
 
+.reflect-history {
+  margin-top: 8px;
+}
+
+.reflect-entry {
+  display: flex;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.reflect-time {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+  min-width: 100px;
+}
+
+.reflect-desc {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
 .issues-section {
   margin-top: 8px;
+}
+
+.issue-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.issue-group {
+  background: rgba(30, 30, 46, 0.3);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.issue-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.issue-group-count {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+
+.issue-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 0;
+  border-top: 1px dashed rgba(255, 255, 255, 0.05);
+}
+
+.issue-item:first-of-type {
+  border-top: none;
+}
+
+.issue-title {
+  font-size: 13px;
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.issue-desc {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.issue-suggestion {
+  font-size: 12px;
+  color: var(--color-text-accent);
+}
+
+.issue-more {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  padding-top: 4px;
 }
 
 .output-content {
