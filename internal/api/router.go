@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	stdsync "sync"
 	"time"
 
@@ -168,7 +169,22 @@ func SetupRouter(h *Handlers) *gin.Engine {
 
 	// CORS middleware
 	r.Use(func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
+		origin := c.Request.Header.Get("Origin")
+		allowed := false
+		if origin == "" {
+			allowed = true
+		} else {
+			// Allow localhost and same-origin for personal use
+			for _, prefix := range []string{"http://localhost", "http://127.0.0.1"} {
+				if strings.HasPrefix(origin, prefix) {
+					allowed = true
+					break
+				}
+			}
+		}
+		if allowed && origin != "" {
+			c.Header("Access-Control-Allow-Origin", origin)
+		}
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		if c.Request.Method == http.MethodOptions {
