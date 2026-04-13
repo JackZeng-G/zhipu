@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch, nextTick } from 'vue'
+import { ref, onMounted, computed, watch, nextTick, defineAsyncComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   NCard,
@@ -27,8 +27,11 @@ import { useKnowledgeStore } from '@/stores/knowledge'
 import type { WikiConcept, GraphNode, GraphEdge } from '@/stores/knowledge'
 import { deleteWikiConcept, confirmConceptConfidence } from '@/api'
 import Sigma2DGraph from '@/components/Sigma2DGraph.vue'
-import Graph3DExplorer from '@/components/Graph3DExplorer.vue'
 import LocalSigmaGraph from '@/components/LocalSigmaGraph.vue'
+
+const Graph3DExplorer = defineAsyncComponent(() =>
+  import('@/components/Graph3DExplorer.vue')
+)
 
 const route = useRoute()
 const router = useRouter()
