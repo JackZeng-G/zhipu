@@ -18,11 +18,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Default NAS credentials for testing
-const defaultNASUsername = "testapi"
-const defaultNASPassword = "Zz123456"
-const defaultNASPort = "5001"
-
 func main() {
 	// 将日志重定向到文件，避免在 windowsgui 模式下弹出窗口
 	logFile, err := os.OpenFile(filepath.Join("data", "server.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
@@ -53,24 +48,13 @@ func main() {
 	aiConfigStore := store.NewAIConfigStore(db, settingsStore)
 	knowledgeStore := store.NewKnowledgeStore(db)
 
-	// Set default NAS credentials if not present (for testing)
-	if nasUsername, _ := settingsStore.GetSetting("nas_username"); nasUsername == "" {
-		settingsStore.SetSetting("nas_username", defaultNASUsername)
-		log.Printf("[main] set default NAS username: %s", defaultNASUsername)
-	}
-	if nasPassword, _ := settingsStore.GetSetting("nas_password_encrypted"); nasPassword == "" {
-		settingsStore.SetSetting("nas_password_encrypted", defaultNASPassword)
-		log.Printf("[main] set default NAS password")
-	}
-	if nasPort, _ := settingsStore.GetSetting("nas_port"); nasPort == "" {
-		settingsStore.SetSetting("nas_port", defaultNASPort)
-		log.Printf("[main] set default NAS port: %s", defaultNASPort)
-	}
-	// NAS host can be set via env var KB_NAS_HOST if not already saved
+	// Restore NAS settings from environment (fallback for initial setup)
 	nasHostEnv := envOrDefault("KB_NAS_HOST", "")
-	if nasHost, _ := settingsStore.GetSetting("nas_host"); nasHost == "" && nasHostEnv != "" {
-		settingsStore.SetSetting("nas_host", nasHostEnv)
-		log.Printf("[main] set NAS host from env: %s", nasHostEnv)
+	if nasHostEnv != "" {
+		if nasHost, _ := settingsStore.GetSetting("nas_host"); nasHost == "" {
+			settingsStore.SetSetting("nas_host", nasHostEnv)
+			log.Printf("[main] set NAS host from env: %s", nasHostEnv)
+		}
 	}
 
 	// Create Ollama client with default settings
