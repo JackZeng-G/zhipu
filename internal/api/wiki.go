@@ -6,29 +6,15 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"regexp"
 	"strings"
 	"time"
 
 	"personal-kb/internal/ai"
 	"personal-kb/internal/store"
+	"personal-kb/internal/util"
 
 	"github.com/gin-gonic/gin"
 )
-
-// slugRegex is the compiled regex for slug generation.
-var slugRegex = regexp.MustCompile("[^a-z0-9一-龥]+")
-
-// slugify converts a string to a URL-friendly slug.
-func slugify(s string) string {
-	s = strings.ToLower(s)
-	s = slugRegex.ReplaceAllString(s, "-")
-	s = strings.Trim(s, "-")
-	if len(s) > 100 {
-		s = s[:100]
-	}
-	return s
-}
 
 // ListWikiPages returns all wiki pages.
 func (h *Handlers) ListWikiPages(c *gin.Context) {
@@ -178,7 +164,7 @@ func (h *Handlers) GenerateWikiPage(c *gin.Context) {
 		}
 	}
 
-	slug := slugify(generatedTitle)
+	slug := util.Slugify(generatedTitle)
 	noteIDsJSON, _ := json.Marshal(noteIDList)
 
 	page := &store.WikiPage{
@@ -311,7 +297,7 @@ func (h *Handlers) AutoGenerateWiki(c *gin.Context) {
 				continue
 			}
 
-			slug := slugify(entity.EntityName)
+			slug := util.Slugify(entity.EntityName)
 			if _, err := h.knowledgeStore.GetWikiPage(ctx, slug); err == nil {
 				continue
 			}

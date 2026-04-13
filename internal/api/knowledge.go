@@ -12,6 +12,7 @@ import (
 
 	"personal-kb/internal/ai"
 	"personal-kb/internal/store"
+	"personal-kb/internal/util"
 
 	"github.com/gin-gonic/gin"
 )
@@ -661,7 +662,7 @@ func (h *Handlers) ingestToWiki(noteID string) {
 	conceptNames := make(map[string]bool)
 	for _, e := range entities {
 		conceptNames[e.EntityName] = true
-		slug := slugify(e.EntityName)
+		slug := util.Slugify(e.EntityName)
 
 		// Use exact match query (efficient) instead of LIKE search
 		noteIDs, err := h.knowledgeStore.GetNoteIDsByEntityName(ctx, e.EntityName)
@@ -722,7 +723,7 @@ func (h *Handlers) ingestToWiki(noteID string) {
 	// Step 2: Build co-occurrence relations between concepts in this note
 	var conceptSlugs []string
 	for name := range conceptNames {
-		conceptSlugs = append(conceptSlugs, slugify(name))
+		conceptSlugs = append(conceptSlugs, util.Slugify(name))
 	}
 	for i := 0; i < len(conceptSlugs); i++ {
 		for j := i + 1; j < len(conceptSlugs); j++ {

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"personal-kb/internal/util"
+
 	"github.com/jmoiron/sqlx"
 )
 
@@ -519,8 +521,8 @@ func (s *KnowledgeStore) BuildCoOccurrenceRelations(ctx context.Context) error {
 
 	// Save relations with co-occurrence >= 1
 	for p, count := range coOcc {
-		slugA := slugifyConcept(p.a)
-		slugB := slugifyConcept(p.b)
+		slugA := util.Slugify(p.a)
+		slugB := util.Slugify(p.b)
 		if slugA == "" || slugB == "" || slugA == slugB {
 			continue
 		}
@@ -535,34 +537,6 @@ func (s *KnowledgeStore) BuildCoOccurrenceRelations(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-// slugifyConcept converts a concept name to a URL-friendly slug.
-func slugifyConcept(s string) string {
-	// Simple slug: lowercase, replace spaces/special chars with hyphens
-	result := make([]byte, 0, len(s))
-	for _, r := range s {
-		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
-			result = append(result, byte(r))
-		} else if r >= 'A' && r <= 'Z' {
-			result = append(result, byte(r+32))
-		} else if r >= 0x4e00 && r <= 0x9fff {
-			// Keep Chinese characters
-			result = append(result, []byte(string(r))...)
-		} else {
-			if len(result) > 0 && result[len(result)-1] != '-' {
-				result = append(result, '-')
-			}
-		}
-	}
-	// Trim trailing hyphen
-	if len(result) > 0 && result[len(result)-1] == '-' {
-		result = result[:len(result)-1]
-	}
-	if len(result) > 100 {
-		result = result[:100]
-	}
-	return string(result)
 }
 
 // UpdateConceptRelationSlugs replaces all references to oldSlug with newSlug.
