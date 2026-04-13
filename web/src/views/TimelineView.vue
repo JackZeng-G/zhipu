@@ -109,6 +109,16 @@ function lintTypeLabel(type: string): string {
   return labels[type] || type
 }
 
+function outputTypeLabel(type: string): string {
+  const labels: Record<string, string> = {
+    query: '查询',
+    gap: '差距分析',
+    synthesis: '综合分析',
+    reflect: '反思'
+  }
+  return labels[type] || type
+}
+
 // ==================== Existing functions ====================
 
 async function handleFullLint() {
@@ -173,8 +183,8 @@ const activityLabels: Record<string, string> = {
   chat_insight: '洞察',
   ingest: '知识吸收',
   lint_fix: '修复',
-  reflect: 'REFLECT',
-  query_persist: 'QUERY 保存',
+  reflect: '反思',
+  query_persist: '查询保存',
   merge: '概念合并',
   confirm_confidence: '置信度确认',
   question_match: '问题匹配',
@@ -324,7 +334,7 @@ async function loadOutputs() {
     const res = await listOutputs()
     outputs.value = res.data.outputs || []
   } catch (e) {
-    message.error('加载 Outputs 失败')
+    message.error('加载输出失败')
   } finally {
     outputsLoading.value = false
   }
@@ -395,11 +405,11 @@ async function handleReflect() {
   try {
     await runReflect()
     reflectRunning.value = true
-    message.success('REFLECT 已启动')
+    message.success('反思已启动')
     pollReflectStatus()
   } catch (e: any) {
     if (e.response?.status === 409) {
-      message.info('REFLECT 正在运行中')
+      message.info('反思正在运行中')
     } else {
       message.error('启动失败')
     }
@@ -417,7 +427,7 @@ async function pollReflectStatus() {
         setTimeout(poll, 3000)
       } else {
         reflectPolling.value = false
-        message.success('REFLECT 完成')
+        message.success('反思完成')
         loadOutputs()
       }
     } catch {
@@ -634,11 +644,11 @@ onMounted(() => {
       </NTabPane>
 
       <!-- Tab 3: Outputs -->
-      <NTabPane name="outputs" tab="Outputs">
+      <NTabPane name="outputs" tab="输出">
         <NSpin :show="outputsLoading">
           <NList v-if="outputs.length > 0" bordered>
             <NListItem v-for="o in outputs" :key="o.slug">
-              <NThing :title="o.title" :description="o.output_type + ' &middot; ' + formatTime(o.created_at)">
+              <NThing :title="o.title" :description="outputTypeLabel(o.output_type) + ' · ' + formatTime(o.created_at)">
                 <template #action>
                   <NSpace>
                     <NButton size="tiny" @click="viewOutput(o.slug)">查看</NButton>
@@ -653,7 +663,7 @@ onMounted(() => {
       </NTabPane>
 
       <!-- Tab 4: Questions -->
-      <NTabPane name="questions" tab="Questions">
+      <NTabPane name="questions" tab="问题">
         <NSpace vertical :size="16">
           <NSpace align="center">
             <NInput
@@ -688,7 +698,7 @@ onMounted(() => {
       </NTabPane>
 
       <!-- Tab 5: REFLECT -->
-      <NTabPane name="reflect" tab="REFLECT">
+      <NTabPane name="reflect" tab="反思">
         <NSpace vertical :size="16">
           <NButton
             type="primary"
@@ -698,22 +708,22 @@ onMounted(() => {
             size="large"
           >
             <template #icon><PlayOutline /></template>
-            {{ reflectRunning ? '正在运行...' : '启动 REFLECT' }}
+            {{ reflectRunning ? '正在运行...' : '启动反思' }}
           </NButton>
           <div v-if="reflectRunning" class="reflect-status">
-            <NSpin size="small" /> REFLECT 四阶段流水线正在运行，请等待...
+            <NSpin size="small" /> 反思四阶段流水线正在运行，请等待...
           </div>
 
           <!-- REFLECT history from activity log -->
           <div v-if="reflectActivities.length > 0" class="reflect-history">
-            <h4 style="margin: 0 0 8px; color: var(--color-text-primary);">REFLECT 历史</h4>
+            <h4 style="margin: 0 0 8px; color: var(--color-text-primary);">反思历史</h4>
             <div v-for="act in reflectActivities" :key="act.id" class="reflect-entry">
               <span class="reflect-time">{{ formatTime(act.created_at) }}</span>
               <span class="reflect-desc">{{ act.description }}</span>
             </div>
           </div>
 
-          <NEmpty v-if="!reflectRunning && reflectActivities.length === 0" description="点击上方按钮启动 REFLECT 分析" />
+          <NEmpty v-if="!reflectRunning && reflectActivities.length === 0" description="点击上方按钮启动反思分析" />
         </NSpace>
       </NTabPane>
 
@@ -779,7 +789,7 @@ onMounted(() => {
     </NTabs>
 
     <!-- Output detail modal -->
-    <NModal v-model:show="showOutputModal" preset="card" style="max-width: 800px" :title="outputDetail?.title || 'Output'">
+    <NModal v-model:show="showOutputModal" preset="card" style="max-width: 800px" :title="outputDetail?.title || '输出详情'">
       <div v-if="outputDetail" class="output-content" v-html="renderMarkdown(outputDetail.content || '')" />
     </NModal>
   </div>
