@@ -113,15 +113,86 @@ make build-all
 
 默认端口: 8080
 
+### Docker 部署
+
+使用预编译方式部署，构建速度快、镜像体积小。
+
+#### 构建镜像
+
+首先在本地编译二进制文件：
+
+```bash
+# 构建前端并嵌入后端
+make build-all
+
+# 构建 Docker 镜像（使用预编译二进制）
+docker build -t personal-kb:latest .
+```
+
+#### 使用 Docker Compose
+
+推荐使用 Docker Compose 进行部署：
+
+```bash
+# 启动服务
+docker compose up -d
+
+# 查看日志
+docker compose logs -f
+
+# 停止服务
+docker compose down
+```
+
+#### 环境变量配置
+
+可在 `docker-compose.yml` 或 `.env` 文件中配置：
+
+| 变量          | 默认值               | 说明                |
+| ------------- | -------------------- | ------------------- |
+| `KB_PORT`     | `8080`               | 服务监听端口        |
+| `KB_DB_PATH`  | `/data/knowledge.db` | 数据库路径          |
+| `KB_NAS_HOST` | -                    | NAS 主机（首次启动）|
+
+#### 数据持久化
+
+数据存储在 Docker volume `personal-kb-data` 中：
+
+```bash
+# 查看数据卷位置
+docker volume inspect personal-kb-data
+
+# 备份数据
+docker run --rm -v personal-kb-data:/data -v $(pwd):/backup alpine tar czf /backup/kb-backup.tar.gz /data
+
+# 恢复数据
+docker run --rm -v personal-kb-data:/data -v $(pwd):/backup alpine tar xzf /backup/kb-backup.tar.gz -C /
+```
+
+#### 配合 Ollama 使用
+
+如需本地 AI 服务，编辑 `docker-compose.yml` 取消 `ollama` 服务注释：
+
+```yaml
+ollama:
+  image: ollama/ollama:latest
+  ports:
+    - "11434:11434"
+  volumes:
+    - ollama-data:/root/.ollama
+```
+
+然后在应用设置中配置 Ollama URL 为 `http://ollama:11434`。
+
 ## 配置
 
 ### 环境变量
 
-| 变量            | 默认值           | 说明              |
-| --------------- | ---------------- | ----------------- |
-| `KB_PORT`     | `8080`         | 服务监听端口      |
-| `KB_DB_PATH`  | `knowledge.db` | SQLite 数据库路径 |
-| `KB_NAS_HOST` | -                | NAS 主机名 (备用) |
+| 变量          | 默认值        | 说明               |
+| ------------- | ------------- | ------------------ |
+| `KB_PORT`     | `8080`        | 服务监听端口       |
+| `KB_DB_PATH`  | `knowledge.db`| SQLite 数据库路径  |
+| `KB_NAS_HOST` | -             | NAS 主机名 (备用)  |
 
 ### 设置 (通过 UI 或 API)
 

@@ -1,0 +1,58 @@
+# 个人知识库 Docker Compose 配置
+# 使用预编译二进制文件部署
+
+services:
+  knowledge-base:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: personal-kb:latest
+    container_name: personal-kb
+    restart: unless-stopped
+    ports:
+      - "${KB_PORT:-8080}:8080"
+    volumes:
+      # 持久化数据存储
+      - kb-data:/data
+    environment:
+      # 服务端口
+      - KB_PORT=8080
+      # 数据库路径
+      - KB_DB_PATH=/data/knowledge.db
+      # NAS 主机（可选，首次启动时使用）
+      - KB_NAS_HOST=${KB_NAS_HOST:-}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/api/settings"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # 可选：Ollama 本地 AI 服务
+  # 如需本地 AI，取消以下注释
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: ollama
+  #   restart: unless-stopped
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama-data:/root/.ollama
+  #   # GPU 支持（可选）
+  #   # deploy:
+  #   #   resources:
+  #   #     reservations:
+  #   #       devices:
+  #   #         - driver: nvidia
+  #   #           count: 1
+  #   #           capabilities: [gpu]
+
+volumes:
+  kb-data:
+    name: personal-kb-data
+  # ollama-data:
+  #   name: ollama-data
+
+networks:
+  default:
+    name: kb-network
