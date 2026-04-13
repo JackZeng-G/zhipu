@@ -344,12 +344,34 @@ func TestCORSHeaders(t *testing.T) {
 	r, db := setupTestRouter(t)
 	defer db.Close()
 
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodOptions, "/api/notes", nil)
-	r.ServeHTTP(w, req)
+	t.Run("no origin header", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest(http.MethodOptions, "/api/notes", nil)
+		r.ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusNoContent, w.Code)
-	assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"))
+		assert.Equal(t, http.StatusNoContent, w.Code)
+		assert.Empty(t, w.Header().Get("Access-Control-Allow-Origin"))
+	})
+
+	t.Run("localhost origin allowed", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest(http.MethodOptions, "/api/notes", nil)
+		req.Header.Set("Origin", "http://localhost:5173")
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNoContent, w.Code)
+		assert.Equal(t, "http://localhost:5173", w.Header().Get("Access-Control-Allow-Origin"))
+	})
+
+	t.Run("non-localhost origin rejected", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest(http.MethodOptions, "/api/notes", nil)
+		req.Header.Set("Origin", "http://evil.com")
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNoContent, w.Code)
+		assert.Empty(t, w.Header().Get("Access-Control-Allow-Origin"))
+	})
 }
 
 func TestNASConnect_InvalidRequest(t *testing.T) {
