@@ -116,12 +116,18 @@ func (h *Handlers) TriggerIndex(c *gin.Context) {
 	ctx := context.Background()
 
 	if req.NoteID != "" {
-		// Index single note
+		// Index single note - get title for activity log
+		note, err := h.notesStore.GetNote(ctx, req.NoteID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "note not found"})
+			return
+		}
 		if err := h.indexNote(ctx, provider, req.NoteID); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		h.knowledgeStore.LogActivity(ctx, "index", "note", req.NoteID, "indexed single note", nil)
+		h.knowledgeStore.LogActivity(ctx, "index", "note", req.NoteID,
+			fmt.Sprintf("indexed note: %s", note.Title), nil)
 		c.JSON(http.StatusOK, gin.H{"success": true, "indexed": req.NoteID})
 		return
 	}
