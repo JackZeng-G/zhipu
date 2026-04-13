@@ -38,7 +38,7 @@ func NewAuthClient(baseURL string, insecureSkipVerify bool) *AuthClient {
 }
 
 // Login authenticates against the Synology NAS using SYNO.API.Auth.
-// On success the session ID is stored internally and used for subsequent requests.
+// If 2FA is required (error code 403), it returns ErrOTPRequired.
 func (a *AuthClient) Login(account, password string) error {
 	a.account = account
 	a.password = password
@@ -64,7 +64,49 @@ func (a *AuthClient) Login(account, password string) error {
 	}
 
 	if !result.Success {
+		if result.Error != nil && result.Error.Code == 403 {
+			return &ErrOTPRequired{}
+		}
 		return fmt.Errorf("login failed: %s", synoErrorMessage(result.Error))
+	}
+
+	var data authData
+	if err := json.Unmarshal(result.Data, &data); err != nil {
+		return fmt.Errorf("parse login data: %w", err)
+	}
+
+	a.sessionID = data.SID
+	return nil
+}
+
+// LoginWithOTP authenticates with username, password and OTP code for 2FA.
+func (a *AuthClient) LoginWithOTP(account, password, otpCode string) error {
+	a.account = account
+	a.password = password
+
+	params := url.Values{}
+	params.Set("api", "SYNO.API.Auth")
+	params.Set("version", "6")
+	params.Set("method", "login")
+	params.Set("account", account)
+	params.Set("passwd", password)
+	params.Set("otp_code", otpCode)
+	params.Set("session", "NoteStation")
+	params.Set("format", "cookie")
+
+	resp, err := a.post(params)
+	if err != nil {
+		return fmt.Errorf("login request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var result synoResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("decode login response: %w", err)
+	}
+
+	if !result.Success {
+		return fmt.Errorf("login with OTP failed: %s", synoErrorMessage(result.Error))
 	}
 
 	var data authData
@@ -127,6 +169,11 @@ func (a *AuthClient) post(params url.Values) (*http.Response, error) {
 	return a.httpClient.Do(req)
 }
 
+// Get sends a GET request with the given query parameters (exported).
+func (a *AuthClient) Get(params url.Values) (*http.Response, error) {
+	return a.get(params)
+}
+
 // get sends a GET request with the given query parameters.
 // It adds the session cookie if logged in.
 func (a *AuthClient) get(params url.Values) (*http.Response, error) {
@@ -135,6 +182,24 @@ func (a *AuthClient) get(params url.Values) (*http.Response, error) {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	req.URL.RawQuery = params.Encode()
+
+	if a.sessionID != "" {
+		req.AddCookie(&http.Cookie{
+			Name:  "id",
+			Value: a.sessionID,
+		})
+	}
+
+	return a.httpClient.Do(req)
+}
+
+// GetRaw sends a GET request to a raw path on the NAS (not through webapi/entry.cgi).
+// It adds the session cookie if logged in.
+func (a *AuthClient) GetRaw(path string) (*http.Response, error) {
+	req, err := http.NewRequest("GET", a.baseURL+path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
 
 	if a.sessionID != "" {
 		req.AddCookie(&http.Cookie{

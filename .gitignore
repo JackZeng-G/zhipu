@@ -1,8 +1,14 @@
 bin/
 *.exe
+*.exe~
 *.db
 *.db-journal
+*.db-shm
+*.db-wal
 web/node_modules/
 web/dist/
 .env
 tmp/
+data/
+.superpowers/
+docs/superpowers/

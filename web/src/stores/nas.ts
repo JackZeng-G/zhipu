@@ -21,16 +21,25 @@ export const useNASStore = defineStore('nas', () => {
     }
   }
 
-  async function connect(data: { host: string; port: number; username: string; password: string }) {
+  const otpRequired = ref(false)
+
+  async function connect(data: { host: string; port: number; username: string; password: string; otp_code?: string }) {
     loading.value = true
     error.value = ''
+    otpRequired.value = false
     try {
       const res = await connectNAS(data)
-      connected.value = res.data.connected
+      connected.value = res.data.success ?? res.data.connected
       host.value = data.host
       lastSync.value = res.data.last_sync || null
     } catch (e: any) {
-      error.value = e.response?.data?.error || e.message || 'Failed to connect'
+      const errData = e.response?.data
+      if (errData?.otp_required) {
+        otpRequired.value = true
+        error.value = '需要二次验证码'
+      } else {
+        error.value = errData?.error || e.message || 'Failed to connect'
+      }
       connected.value = false
     } finally {
       loading.value = false
@@ -70,6 +79,7 @@ export const useNASStore = defineStore('nas', () => {
     lastSync,
     loading,
     error,
+    otpRequired,
     checkStatus,
     connect,
     disconnect,

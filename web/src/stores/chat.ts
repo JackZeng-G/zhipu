@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { getConversations, createConversation, sendMessage } from '@/api'
+import { getConversations, createConversation, deleteConversation, sendMessage } from '@/api'
 
 export interface Conversation {
   id: number
@@ -54,6 +54,19 @@ export const useChatStore = defineStore('chat', () => {
     messages.value = conv.messages || []
   }
 
+  async function remove(id: number) {
+    try {
+      await deleteConversation(id)
+      conversations.value = conversations.value.filter(c => c.id !== id)
+      if (currentConv.value?.id === id) {
+        currentConv.value = null
+        messages.value = []
+      }
+    } catch (e: any) {
+      error.value = e.message || 'Failed to delete conversation'
+    }
+  }
+
   async function send(content: string) {
     if (!currentConv.value) return
 
@@ -91,6 +104,7 @@ export const useChatStore = defineStore('chat', () => {
     fetchConversations,
     create,
     selectConversation,
+    remove,
     send
   }
 })

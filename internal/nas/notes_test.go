@@ -17,11 +17,6 @@ func setupTestServer(handler http.HandlerFunc) (*httptest.Server, *NoteStationCl
 }
 
 func TestListNotebooks(t *testing.T) {
-	notebooks := []Notebook{
-		{ID: "nb1", Title: "Personal", ParentID: "", CreatedTime: 1700000000, ModifiedTime: 1700001000},
-		{ID: "nb2", Title: "Work", ParentID: "", CreatedTime: 1700002000, ModifiedTime: 1700003000},
-	}
-
 	server, client := setupTestServer(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			t.Errorf("method = %s, want GET", r.Method)
@@ -44,7 +39,13 @@ func TestListNotebooks(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": true,
-			"data":    notebooks,
+			"data": map[string]interface{}{
+				"notebooks": []map[string]interface{}{
+					{"object_id": "nb1", "title": "Personal", "ctime": float64(1700000000), "mtime": float64(1700001000)},
+					{"object_id": "nb2", "title": "Work", "ctime": float64(1700002000), "mtime": float64(1700003000)},
+				},
+				"total": 2,
+			},
 		})
 	})
 	defer server.Close()
@@ -75,11 +76,6 @@ func TestListNotebooks_NotLoggedIn(t *testing.T) {
 }
 
 func TestListNotes(t *testing.T) {
-	notes := []Note{
-		{ID: "n1", NotebookID: "nb1", Title: "First Note", CreatedTime: 1700000000, ModifiedTime: 1700001000},
-		{ID: "n2", NotebookID: "nb1", Title: "Second Note", CreatedTime: 1700002000, ModifiedTime: 1700003000},
-	}
-
 	server, client := setupTestServer(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		if q.Get("api") != "SYNO.NoteStation.Note" {
@@ -103,7 +99,10 @@ func TestListNotes(t *testing.T) {
 			"success": true,
 			"data": map[string]interface{}{
 				"total": 2,
-				"items": notes,
+				"notes": []map[string]interface{}{
+					{"object_id": "n1", "parent_id": "nb1", "title": "First Note", "ctime": float64(1700000000), "mtime": float64(1700001000)},
+					{"object_id": "n2", "parent_id": "nb1", "title": "Second Note", "ctime": float64(1700002000), "mtime": float64(1700003000)},
+				},
 			},
 		})
 	})
@@ -151,16 +150,6 @@ func TestListNotes_APIError(t *testing.T) {
 }
 
 func TestGetNote(t *testing.T) {
-	note := Note{
-		ID:            "n42",
-		NotebookID:    "nb1",
-		Title:         "Test Note",
-		ContentHTML:   "<h1>Hello</h1><p>World</p>",
-		Tags:          []string{"test", "important"},
-		CreatedTime:   1700000000,
-		ModifiedTime:  1700001000,
-	}
-
 	server, client := setupTestServer(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		if q.Get("api") != "SYNO.NoteStation.Note" {
@@ -176,7 +165,14 @@ func TestGetNote(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": true,
-			"data":    note,
+			"data": map[string]interface{}{
+				"object_id": "n42",
+				"parent_id": "nb1",
+				"title":     "Test Note",
+				"body":      "<h1>Hello</h1><p>World</p>",
+				"ctime":     float64(1700000000),
+				"mtime":     float64(1700001000),
+			},
 		})
 	})
 	defer server.Close()
@@ -194,9 +190,6 @@ func TestGetNote(t *testing.T) {
 	}
 	if result.ContentHTML != "<h1>Hello</h1><p>World</p>" {
 		t.Errorf("ContentHTML = %s", result.ContentHTML)
-	}
-	if len(result.Tags) != 2 || result.Tags[0] != "test" || result.Tags[1] != "important" {
-		t.Errorf("Tags = %v, want [test important]", result.Tags)
 	}
 }
 

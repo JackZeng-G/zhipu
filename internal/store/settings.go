@@ -129,3 +129,13 @@ func (s *SettingsStore) SetSetting(key string, value string) error {
 	}
 	return nil
 }
+
+// EncryptValue encrypts a plaintext value and returns the base64-encoded ciphertext.
+func (s *SettingsStore) EncryptValue(plaintext string) (string, error) {
+	return encrypt(plaintext)
+}
+
+// DecryptValue decrypts a base64-encoded ciphertext and returns the plaintext.
+func (s *SettingsStore) DecryptValue(ciphertext string) (string, error) {
+	return decrypt(ciphertext)
+}

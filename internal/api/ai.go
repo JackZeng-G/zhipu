@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"personal-kb/internal/ollama"
 	"personal-kb/internal/store"
 
 	"github.com/gin-gonic/gin"
@@ -19,6 +18,12 @@ func (h *Handlers) AISummarize(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "note id is required"})
+		return
+	}
+
+	provider := h.getProvider()
+	if provider == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no AI provider configured, please add one in Settings"})
 		return
 	}
 
@@ -40,9 +45,13 @@ func (h *Handlers) AISummarize(c *gin.Context) {
 	}
 
 	content := buildNoteContent(note)
-	prompt := fmt.Sprintf("Summarize this note concisely in 2-3 sentences:\n\n%s", content)
+	if len(content) <= len(note.Title)+5 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "note has no content to summarize"})
+		return
+	}
+	prompt := fmt.Sprintf("请用中文简洁总结以下笔记内容，2-3句话概括要点：\n\n%s", content)
 
-	summary, err := h.ollamaClient.Generate(ctx, prompt)
+	summary, err := provider.Generate(ctx, prompt)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "AI generation failed: " + err.Error()})
 		return
@@ -76,10 +85,53 @@ func (h *Handlers) AISearch(c *gin.Context) {
 		return
 	}
 
+	provider := h.getProvider()
+	if provider == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no AI provider configured, please add one in Settings"})
+		return
+	}
+
 	ctx := context.Background()
 
-	// Get all notes (limited to title + first 200 chars of content)
-	notes, err := h.notesStore.ListNotes(ctx, "", 0, 1000)
+	// Step 1: Search category index
+	var candidateNotes []store.Note
+	if catNoteIDs, err := h.knowledgeStore.SearchNotesByCategoryQuery(ctx, req.Query); err == nil && len(catNoteIDs) > 0 {
+		seen := make(map[string]bool)
+		for _, nid := range catNoteIDs {
+			if seen[nid] {
+				continue
+			}
+			seen[nid] = true
+			if note, err := h.notesStore.GetNote(ctx, nid); err == nil {
+				candidateNotes = append(candidateNotes, *note)
+			}
+		}
+	}
+
+	// Step 2: Search entity index
+	if entityResults := h.entityBasedSearch(ctx, req.Query); len(entityResults) > 0 {
+		seen := make(map[string]bool)
+		for _, n := range candidateNotes {
+			seen[n.ID] = true
+		}
+		for _, n := range entityResults {
+			if !seen[n.ID] {
+				candidateNotes = append(candidateNotes, n)
+			}
+		}
+	}
+
+	// Step 3: If we have candidates, refine with LLM
+	if len(candidateNotes) > 0 {
+		results := h.refineSearchWithLLM(ctx, provider, req.Query, candidateNotes)
+		if len(results) > 0 {
+			c.JSON(http.StatusOK, gin.H{"results": results})
+			return
+		}
+	}
+
+	// Fall back to full note list search
+	notes, err := h.notesStore.ListNotes(ctx, "", 0, 10000)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list notes: " + err.Error()})
 		return
@@ -114,7 +166,7 @@ Example format: [{"note_id": "some-id", "reason": "This note discusses..."}]
 
 Return ONLY the JSON array, no other text.`, noteList.String(), req.Query)
 
-	response, err := h.ollamaClient.Generate(ctx, prompt)
+	response, err := provider.Generate(ctx, prompt)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "AI search failed: " + err.Error()})
 		return
@@ -123,6 +175,61 @@ Return ONLY the JSON array, no other text.`, noteList.String(), req.Query)
 	// Parse the AI response
 	results := parseSearchResults(response, notes)
 	c.JSON(http.StatusOK, gin.H{"results": results})
+}
+
+// entityBasedSearch finds notes via entity index matching.
+func (h *Handlers) entityBasedSearch(ctx context.Context, query string) []store.Note {
+	entities, err := h.knowledgeStore.SearchEntities(ctx, query)
+	if err != nil || len(entities) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]bool)
+	var notes []store.Note
+	for _, e := range entities {
+		if seen[e.NoteID] {
+			continue
+		}
+		seen[e.NoteID] = true
+		note, err := h.notesStore.GetNote(ctx, e.NoteID)
+		if err == nil {
+			notes = append(notes, *note)
+		}
+	}
+	return notes
+}
+
+// refineSearchWithLLM uses LLM to refine entity-matched results.
+func (h *Handlers) refineSearchWithLLM(ctx context.Context, provider interface {
+	Generate(context.Context, string) (string, error)
+}, query string, notes []store.Note) []aiSearchResult {
+
+	var noteList strings.Builder
+	for i, n := range notes {
+		content := ""
+		if n.ContentText != nil {
+			content = *n.ContentText
+			if len(content) > 200 {
+				content = content[:200]
+			}
+		}
+		noteList.WriteString(fmt.Sprintf("[%d] ID: %s, Title: %s, Content: %s\n", i, n.ID, n.Title, content))
+	}
+
+	prompt := fmt.Sprintf(`Given these candidate notes:
+%s
+
+Which notes are relevant to the query "%s"?
+
+Return a JSON array where each element has "note_id" and "reason" fields.
+Only include notes that are genuinely relevant.
+Return ONLY the JSON array, no other text.`, noteList.String(), query)
+
+	response, err := provider.Generate(ctx, prompt)
+	if err != nil {
+		return nil
+	}
+	return parseSearchResults(response, notes)
 }
 
 // parseSearchResults extracts search results from the AI response text.
@@ -182,6 +289,12 @@ func (h *Handlers) AIEdit(c *gin.Context) {
 		return
 	}
 
+	provider := h.getProvider()
+	if provider == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no AI provider configured, please add one in Settings"})
+		return
+	}
+
 	ctx := context.Background()
 
 	prompt := fmt.Sprintf(`Instruction: %s
@@ -191,7 +304,7 @@ Text to edit:
 
 Return ONLY the edited text, nothing else.`, req.Instruction, req.SelectedText)
 
-	editedText, err := h.ollamaClient.Generate(ctx, prompt)
+	editedText, err := provider.Generate(ctx, prompt)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "AI edit failed: " + err.Error()})
 		return
@@ -257,6 +370,23 @@ func (h *Handlers) CreateConversation(c *gin.Context) {
 	c.JSON(http.StatusOK, conv)
 }
 
+// DeleteConversation deletes a conversation and all its messages.
+func (h *Handlers) DeleteConversation(c *gin.Context) {
+	id, err := paramInt(c, "id")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx := context.Background()
+	if err := h.convStore.DeleteConversation(ctx, int64(id)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete conversation: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
 // sendMessageRequest is the request body for POST /api/ai/conversations/:id/messages.
 type sendMessageRequest struct {
 	Content string `json:"content" binding:"required"`
@@ -282,6 +412,12 @@ func (h *Handlers) SendMessage(c *gin.Context) {
 		return
 	}
 
+	provider := h.getProvider()
+	if provider == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no AI provider configured, please add one in Settings"})
+		return
+	}
+
 	ctx := context.Background()
 
 	// Get the conversation
@@ -297,22 +433,19 @@ func (h *Handlers) SendMessage(c *gin.Context) {
 		return
 	}
 
-	// Build message list for Ollama
-	var messages []ollama.Message
+	// Build prompt from conversation history
+	var promptBuilder strings.Builder
 
 	// If conversation has a note, prepend as system context
 	if conv.NoteID != nil && *conv.NoteID != "" {
 		note, err := h.notesStore.GetNote(ctx, *conv.NoteID)
 		if err == nil {
 			content := buildNoteContent(note)
-			messages = append(messages, ollama.Message{
-				Role: "system",
-				Content: fmt.Sprintf("You are discussing this note:\n\n%s", content),
-			})
+			promptBuilder.WriteString(fmt.Sprintf("[System]: You are discussing this note:\n\n%s\n\n", content))
 		}
 	}
 
-	// Get previous messages
+	// Get previous messages (includes the just-saved user message)
 	prevMsgs, err := h.convStore.GetMessages(ctx, convID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get messages: " + err.Error()})
@@ -320,10 +453,14 @@ func (h *Handlers) SendMessage(c *gin.Context) {
 	}
 
 	for _, msg := range prevMsgs {
-		messages = append(messages, ollama.Message{
-			Role:    msg.Role,
-			Content: msg.Content,
-		})
+		switch msg.Role {
+		case "user":
+			promptBuilder.WriteString(fmt.Sprintf("[User]: %s\n\n", msg.Content))
+		case "assistant":
+			promptBuilder.WriteString(fmt.Sprintf("[Assistant]: %s\n\n", msg.Content))
+		case "system":
+			promptBuilder.WriteString(fmt.Sprintf("[System]: %s\n\n", msg.Content))
+		}
 	}
 
 	// Stream response via SSE
@@ -334,21 +471,18 @@ func (h *Handlers) SendMessage(c *gin.Context) {
 	streamCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
 	defer cancel()
 
-	ch, err := h.ollamaClient.ChatStream(streamCtx, messages)
-	if err != nil {
-		// Write error as SSE event
-		fmt.Fprintf(c.Writer, "data: {\"error\": \"%s\"}\n\n", escapeJSON(err.Error()))
-		c.Writer.Flush()
-		return
-	}
-
 	var fullResponse strings.Builder
-	for chunk := range ch {
+	err = provider.GenerateStream(streamCtx, promptBuilder.String(), func(chunk string) {
 		fullResponse.WriteString(chunk)
-
 		data, _ := json.Marshal(map[string]string{"chunk": chunk})
 		fmt.Fprintf(c.Writer, "data: %s\n\n", string(data))
 		c.Writer.Flush()
+	})
+
+	if err != nil {
+		fmt.Fprintf(c.Writer, "data: {\"error\": \"%s\"}\n\n", escapeJSON(err.Error()))
+		c.Writer.Flush()
+		return
 	}
 
 	// Save assistant response
@@ -366,18 +500,42 @@ func buildNoteContent(note *store.Note) string {
 	var sb strings.Builder
 	sb.WriteString(note.Title)
 	if note.ContentText != nil && *note.ContentText != "" {
-		sb.WriteString("\n\n")
-		sb.WriteString(*note.ContentText)
-	} else if note.ContentHTML != nil && *note.ContentHTML != "" {
-		sb.WriteString("\n\n")
-		// Truncate very long HTML content
-		html := *note.ContentHTML
-		if len(html) > 2000 {
-			html = html[:2000] + "..."
+		text := *note.ContentText
+		if len(text) > 3000 {
+			text = text[:3000] + "..."
 		}
-		sb.WriteString(html)
+		sb.WriteString("\n\n")
+		sb.WriteString(text)
+	} else if note.ContentHTML != nil && *note.ContentHTML != "" {
+		html := *note.ContentHTML
+		if len(html) > 3000 {
+			html = html[:3000] + "..."
+		}
+		// Strip HTML tags for cleaner AI prompt
+		text := stripHTMLTags(html)
+		sb.WriteString("\n\n")
+		sb.WriteString(text)
 	}
 	return sb.String()
+}
+
+// stripHTMLTags removes HTML tags from a string.
+func stripHTMLTags(html string) string {
+	var result strings.Builder
+	inTag := false
+	for _, r := range html {
+		switch r {
+		case '<':
+			inTag = true
+		case '>':
+			inTag = false
+		default:
+			if !inTag {
+				result.WriteRune(r)
+			}
+		}
+	}
+	return strings.TrimSpace(result.String())
 }
 
 // escapeJSON escapes a string for safe inclusion in a JSON value.

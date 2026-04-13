@@ -18,7 +18,8 @@ func NewClient(baseURL, model string) *Client {
 	return &Client{
 		baseURL: baseURL,
 		httpClient: &http.Client{
-			Timeout: 120 * time.Second,
+			Timeout:   300 * time.Second,
+			Transport: &http.Transport{},
 		},
 		model: model,
 	}
@@ -46,4 +47,11 @@ func (c *Client) Ping() error {
 		return fmt.Errorf("ollama ping: unexpected status %d", resp.StatusCode)
 	}
 	return nil
+}
+
+// Close closes idle connections held by the HTTP client.
+func (c *Client) Close() {
+	if transport, ok := c.httpClient.Transport.(*http.Transport); ok {
+		transport.CloseIdleConnections()
+	}
 }

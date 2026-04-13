@@ -46,6 +46,15 @@ func (m *mockNASClient) ListNotes(offset, limit int) (*nas.NoteListResponse, err
 	}, nil
 }
 
+func (m *mockNASClient) GetNote(noteID string) (*nas.Note, error) {
+	for _, n := range m.notes {
+		if n.ID == noteID {
+			return &n, nil
+		}
+	}
+	return nil, fmt.Errorf("note not found: %s", noteID)
+}
+
 // ---- Mock Store ----
 
 type mockStore struct {

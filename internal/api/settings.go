@@ -11,6 +11,8 @@ type settingsResponse struct {
 	OllamaURL   string `json:"ollama_url"`
 	OllamaModel string `json:"ollama_model"`
 	NASHost     string `json:"nas_host,omitempty"`
+	NASUsername string `json:"nas_username,omitempty"`
+	NASPort     string `json:"nas_port,omitempty"`
 }
 
 // updateSettingsRequest is the request body for PUT /api/settings.
@@ -25,6 +27,8 @@ func (h *Handlers) GetSettings(c *gin.Context) {
 	ollamaURL, _ := h.settingsStore.GetSetting("ollama_url")
 	ollamaModel, _ := h.settingsStore.GetSetting("ollama_model")
 	nasHost, _ := h.settingsStore.GetSetting("nas_host")
+	nasUsername, _ := h.settingsStore.GetSetting("nas_username")
+	nasPort, _ := h.settingsStore.GetSetting("nas_port")
 
 	if ollamaURL == "" {
 		ollamaURL = "http://localhost:11434"
@@ -37,6 +41,8 @@ func (h *Handlers) GetSettings(c *gin.Context) {
 		OllamaURL:   ollamaURL,
 		OllamaModel: ollamaModel,
 		NASHost:     nasHost,
+		NASUsername: nasUsername,
+		NASPort:     nasPort,
 	})
 }
 

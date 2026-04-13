@@ -10,10 +10,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ListNotebooks returns all notebooks.
+// ListNotebooks returns all notebooks that contain at least one note.
 func (h *Handlers) ListNotebooks(c *gin.Context) {
 	ctx := context.Background()
-	notebooks, err := h.notesStore.ListNotebooks(ctx)
+	notebooks, err := h.notesStore.ListNotebooksWithNotes(ctx)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list notebooks: " + err.Error()})
 		return
@@ -49,7 +49,7 @@ func (h *Handlers) ListNotes(c *gin.Context) {
 	if page < 1 {
 		page = 1
 	}
-	if pageSize < 1 || pageSize > 100 {
+	if pageSize < 1 || pageSize > 10000 {
 		pageSize = 20
 	}
 
@@ -63,9 +63,7 @@ func (h *Handlers) ListNotes(c *gin.Context) {
 		return
 	}
 
-	// Get total count by fetching with a large limit
-	allNotes, _ := h.notesStore.ListNotes(ctx, notebookID, 0, 1000000)
-	total := len(allNotes)
+	total, _ := h.notesStore.CountNotes(ctx, notebookID)
 
 	items := make([]noteItem, 0, len(notes))
 	for _, n := range notes {
@@ -102,6 +100,13 @@ func (h *Handlers) GetNote(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "note not found"})
 		return
+	}
+
+	// Rewrite image URLs to use proxy
+	if note.ContentHTML != nil && *note.ContentHTML != "" {
+		host, _ := h.settingsStore.GetSetting("nas_host")
+		rewritten := rewriteImageURLs(*note.ContentHTML, host, id)
+		note.ContentHTML = &rewritten
 	}
 
 	c.JSON(http.StatusOK, note)

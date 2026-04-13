@@ -4,7 +4,8 @@ import { getNotebooks, getNotes, getNote, summarizeNote, aiEdit } from '@/api'
 
 export interface Notebook {
   id: string
-  name: string
+  title: string
+  parent_id: string | null
   children?: Notebook[]
 }
 
@@ -12,12 +13,13 @@ export interface Note {
   id: string
   title: string
   notebook_id: string
-  modified_time: string
-  created_time: string
+  modified_time: number
+  created_time: number
 }
 
 export interface NoteDetail extends Note {
-  content: string
+  content_html: string
+  content_text: string | null
 }
 
 export const useNotesStore = defineStore('notes', () => {
@@ -51,7 +53,7 @@ export const useNotesStore = defineStore('notes', () => {
         page,
         page_size: pageSize
       })
-      notes.value = res.data.notes || []
+      notes.value = res.data.items || []
       pagination.value = {
         page,
         pageSize,

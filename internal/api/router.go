@@ -246,6 +246,8 @@ func SetupRouter(h *Handlers) *gin.Engine {
 			api.POST("/wiki/graph/refresh", h.RefreshConceptGraph)
 			api.GET("/wiki/entities", h.ListEntities)
 			api.POST("/wiki/auto", h.AutoGenerateWiki)
+			api.GET("/wiki/merge/candidates", h.GetMergeCandidates)
+			api.POST("/wiki/merge", h.ExecuteMerge)
 
 		// Questions endpoints
 		api.POST("/questions", h.CreateQuestion)
