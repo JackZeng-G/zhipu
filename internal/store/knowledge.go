@@ -565,6 +565,36 @@ func slugifyConcept(s string) string {
 	return string(result)
 }
 
+// UpdateConceptRelationSlugs replaces all references to oldSlug with newSlug.
+// It deletes rows that would create duplicates after the update.
+func (s *KnowledgeStore) UpdateConceptRelationSlugs(ctx context.Context, oldSlug, newSlug string) error {
+	// Delete rows where updating would create a duplicate (same pair already exists with newSlug)
+	_, err := s.db.ExecContext(ctx,
+		"DELETE FROM concept_relations WHERE source_concept_slug = ? AND target_concept_slug IN (SELECT target_concept_slug FROM concept_relations WHERE source_concept_slug = ?)",
+		newSlug, oldSlug)
+	if err != nil {
+		return fmt.Errorf("deduplicate source relations: %w", err)
+	}
+	_, err = s.db.ExecContext(ctx,
+		"DELETE FROM concept_relations WHERE target_concept_slug = ? AND source_concept_slug IN (SELECT source_concept_slug FROM concept_relations WHERE target_concept_slug = ?)",
+		newSlug, oldSlug)
+	if err != nil {
+		return fmt.Errorf("deduplicate target relations: %w", err)
+	}
+
+	_, err = s.db.ExecContext(ctx, "UPDATE concept_relations SET source_concept_slug = ? WHERE source_concept_slug = ?",
+		newSlug, oldSlug)
+	if err != nil {
+		return fmt.Errorf("update source slug: %w", err)
+	}
+	_, err = s.db.ExecContext(ctx, "UPDATE concept_relations SET target_concept_slug = ? WHERE target_concept_slug = ?",
+		newSlug, oldSlug)
+	if err != nil {
+		return fmt.Errorf("update target slug: %w", err)
+	}
+	return nil
+}
+
 // === Wiki Outputs ===
 
 // WikiOutput represents a persisted query answer or analysis result.
