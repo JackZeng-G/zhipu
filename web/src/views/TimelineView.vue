@@ -8,6 +8,7 @@ import {
 } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import { RefreshOutline, PulseOutline, PlayOutline, AddOutline, TrashOutline } from '@vicons/ionicons5'
+import DOMPurify from 'dompurify'
 import {
   getActivities, runLint, getIndexStatus, resetIndexes, triggerIndex,
   listOutputs, getOutput, deleteOutput,
@@ -94,6 +95,12 @@ const lintIssueGroups = computed(() => {
   }
   return groups
 })
+
+// Count lint issues by type
+function lintIssueCount(type: string): number {
+  if (!lintResult.value?.issues) return 0
+  return lintResult.value.issues.filter((i: any) => i.type === type).length
+}
 
 function lintTypeLabel(type: string): string {
   const labels: Record<string, string> = {
@@ -534,7 +541,7 @@ function renderMarkdown(content: string): string {
   html = html.replace(/^# (.+)$/gm, '<h2>$1</h2>')
   // Line breaks
   html = html.replace(/\n/g, '<br>')
-  return html
+  return DOMPurify.sanitize(html)
 }
 
 // ==================== Lifecycle ====================
@@ -573,6 +580,14 @@ onMounted(() => {
               <div class="status-item">
                 <span class="status-value">{{ indexStatus.total_relations || 0 }}</span>
                 <span class="status-label">关联</span>
+              </div>
+              <div class="status-item" v-if="lintResult">
+                <span class="status-value" :class="{ 'text-warning': lintIssueCount('no_relations') > 0 }">{{ lintIssueCount('no_relations') }}</span>
+                <span class="status-label">无关联</span>
+              </div>
+              <div class="status-item" v-if="lintResult">
+                <span class="status-value" :class="{ 'text-warning': lintIssueCount('stub_concept') > 0 }">{{ lintIssueCount('stub_concept') }}</span>
+                <span class="status-label">空概念</span>
               </div>
               <div class="status-item" v-if="indexStatus.active_provider">
                 <span class="status-value">{{ indexStatus.active_provider }}</span>

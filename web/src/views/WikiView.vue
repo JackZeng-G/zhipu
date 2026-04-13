@@ -25,6 +25,7 @@ import { BookOutline, TrashOutline, RefreshOutline, GitNetworkOutline, ListOutli
 import type { SelectOption } from 'naive-ui'
 import { useKnowledgeStore } from '@/stores/knowledge'
 import type { WikiConcept, GraphNode, GraphEdge } from '@/stores/knowledge'
+import DOMPurify from 'dompurify'
 import { deleteWikiConcept, confirmConceptConfidence } from '@/api'
 import Sigma2DGraph from '@/components/Sigma2DGraph.vue'
 import LocalSigmaGraph from '@/components/LocalSigmaGraph.vue'
@@ -104,7 +105,7 @@ function formatDate(ts: number) {
 }
 
 function renderMarkdown(content: string): string {
-  return content
+  const html = content
     .replace(/^### (.+)$/gm, '<h3 class="wiki-h3">$1</h3>')
     .replace(/^## (.+)$/gm, '<h2 class="wiki-h2">$1</h2>')
     .replace(/^# (.+)$/gm, '<h1 class="wiki-h1">$1</h1>')
@@ -118,6 +119,7 @@ function renderMarkdown(content: string): string {
     .replace(/^- (.+)$/gm, '<li class="wiki-li">$1</li>')
     .replace(/(<li.*<\/li>\n?)+/g, '<ul class="wiki-ul">$&</ul>')
     .replace(/\n/g, '<br>')
+  return DOMPurify.sanitize(html)
 }
 
 function parseEvolutionLog(log: string): Array<{ action: string; detail: string; [key: string]: any }> {
