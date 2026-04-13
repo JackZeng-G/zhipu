@@ -194,6 +194,14 @@ func SetupRouter(h *Handlers) *gin.Engine {
 		c.Next()
 	})
 
+	// Request timeout middleware
+	r.Use(func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 60*time.Second)
+		defer cancel()
+		c.Request = c.Request.WithContext(ctx)
+		c.Next()
+	})
+
 	api := r.Group("/api")
 
 	// Health endpoint
