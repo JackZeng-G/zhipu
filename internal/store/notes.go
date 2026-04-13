@@ -43,14 +43,15 @@ func NewNotesStore(db *sqlx.DB) *NotesStore {
 // SaveNote inserts or updates a note by ID (upsert).
 func (s *NotesStore) SaveNote(ctx context.Context, note *Note) error {
 	_, err := s.db.NamedExecContext(ctx, `
-		INSERT INTO notes (id, notebook_id, title, content_html, content_text, tags, created_time, modified_time, synced_at)
-		VALUES (:id, :notebook_id, :title, :content_html, :content_text, :tags, :created_time, :modified_time, :synced_at)
+		INSERT INTO notes (id, notebook_id, title, content_html, content_text, tags, content_hash, created_time, modified_time, synced_at)
+		VALUES (:id, :notebook_id, :title, :content_html, :content_text, :tags, :content_hash, :created_time, :modified_time, :synced_at)
 		ON CONFLICT(id) DO UPDATE SET
 			notebook_id    = excluded.notebook_id,
 			title          = excluded.title,
 			content_html   = excluded.content_html,
 			content_text   = excluded.content_text,
 			tags           = excluded.tags,
+			content_hash   = excluded.content_hash,
 			created_time   = excluded.created_time,
 			modified_time  = excluded.modified_time,
 			synced_at      = excluded.synced_at
