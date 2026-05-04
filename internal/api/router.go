@@ -11,7 +11,6 @@ import (
 
 	"personal-kb/internal/ai"
 	"personal-kb/internal/nas"
-	"personal-kb/internal/ollama"
 	"personal-kb/internal/store"
 	"personal-kb/internal/sync"
 
@@ -27,7 +26,6 @@ type Handlers struct {
 	knowledgeStore *store.KnowledgeStore
 	nasClient      *nas.NoteStationClient
 	authClient     *nas.AuthClient
-	ollamaClient   *ollama.Client
 	syncService    *sync.SyncService
 
 	// activeProvider is the currently active AI provider (may be nil).
@@ -48,7 +46,6 @@ func NewHandlers(
 	knowledgeStore *store.KnowledgeStore,
 	nasClient *nas.NoteStationClient,
 	authClient *nas.AuthClient,
-	ollamaClient *ollama.Client,
 	syncService *sync.SyncService,
 ) *Handlers {
 	h := &Handlers{
@@ -59,7 +56,6 @@ func NewHandlers(
 		knowledgeStore: knowledgeStore,
 		nasClient:      nasClient,
 		authClient:     authClient,
-		ollamaClient:   ollamaClient,
 		syncService:    syncService,
 		summaryCache:   make(map[string]string),
 	}

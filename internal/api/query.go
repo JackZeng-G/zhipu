@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"personal-kb/internal/store"
-	"personal-kb/internal/util"
 
 	"github.com/gin-gonic/gin"
 )
@@ -81,7 +80,7 @@ func (h *Handlers) RunQuery(c *gin.Context) {
 		if len(title) > 80 {
 			title = title[:80]
 		}
-		slug = util.Slugify(title) + "-" + time.Now().Format("2006-01-02")
+		slug = store.Slugify(title) + "-" + time.Now().Format("2006-01-02")
 
 		output := &store.WikiOutput{
 			Slug:            slug,

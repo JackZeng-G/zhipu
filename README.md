@@ -19,7 +19,7 @@
 
 | 层级     | 技术                                      |
 | -------- | ----------------------------------------- |
-| 后端     | Go 1.22+ / Gin / SQLite (WAL)             |
+| 后端     | Go 1.26+ / Gin / SQLite (WAL)             |
 | 前端     | Vue 3 / TypeScript / Vite / Naive UI      |
 | AI       | Claude API / Ollama                       |
 | 可视化   | 3d-force-graph / Sigma.js                 |
@@ -28,7 +28,7 @@
 
 ### 方式一：直接运行
 
-**系统要求**: Go 1.22+、Node.js 20.19+ 或 22.12+
+**系统要求**: Go 1.26+、Node.js 20.19+ 或 22.12+
 
 ```bash
 # 克隆项目
@@ -37,7 +37,7 @@ cd zhipu
 
 # 构建并运行
 make build-all
-./bin/server
+./build/server
 ```
 
 访问 `http://localhost:8080`
@@ -109,16 +109,16 @@ make test
 
 ```
 zhipu/
-├── cmd/server/main.go      # 入口
-├── internal/
+├── main.go                     # 入口
+├── internal/               # Go 后端
 │   ├── api/                # HTTP handlers
 │   ├── ai/                 # AI 提供商层
 │   ├── nas/                # NAS 客户端
 │   ├── ollama/             # Ollama 集成
 │   ├── store/              # 数据层
 │   ├── sync/               # 同步调度
-│   └── util/               # 工具函数
-├── web/                    # Vue 前端
+
+├── frontend/               # Vue 前端
 ├── Dockerfile
 ├── docker-compose.yml
 └── Makefile

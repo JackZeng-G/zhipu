@@ -1,35 +1,35 @@
 .PHONY: dev build test clean frontend build-all dev-frontend dev-backend
 
-BINARY := bin/server
+BINARY := build/server
 
 frontend:
-	cd web && npm run build
+	cd frontend && npm run build
 
 build-all: frontend
-	go build -o $(BINARY) ./cmd/server
+	go build -o $(BINARY) .
 
 build:
-	go build -o $(BINARY) ./cmd/server
+	go build -o $(BINARY) .
 
 dev-frontend:
-	cd web && npm run dev
+	cd frontend && npm run dev
 
 dev-backend:
 	@if command -v air > /dev/null 2>&1; then \
 		air; \
 	else \
-		go run ./cmd/server; \
+		go run .; \
 	fi
 
 dev:
 	@if command -v air > /dev/null 2>&1; then \
 		air; \
 	else \
-		go run ./cmd/server; \
+		go run .; \
 	fi
 
 test:
 	go test ./... -v
 
 clean:
-	rm -rf bin/
+	rm -rf build/

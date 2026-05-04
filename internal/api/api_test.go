@@ -9,7 +9,6 @@ import (
 	"os"
 	"testing"
 
-	"personal-kb/internal/ollama"
 	"personal-kb/internal/store"
 
 	"github.com/gin-gonic/gin"
@@ -35,7 +34,6 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *sqlx.DB) {
 	convStore := store.NewConversationsStore(db)
 	aiConfigStore := store.NewAIConfigStore(db, settingsStore)
 	knowledgeStore := store.NewKnowledgeStore(db)
-	ollamaClient := ollama.NewClient("http://localhost:11434", "test-model")
 
 	handlers := NewHandlers(
 		notesStore,
@@ -45,7 +43,6 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *sqlx.DB) {
 		knowledgeStore,
 		nil, // nasClient
 		nil, // authClient
-		ollamaClient,
 		nil, // syncService
 	)
 

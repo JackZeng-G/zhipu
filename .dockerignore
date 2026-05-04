@@ -1,9 +1,9 @@
 # 依赖目录
-web/node_modules/
+frontend/node_modules/
 
-# 构建产物（保留 bin/server 用于 Docker）
-bin/
-!bin/server
+# 构建产物（保留 build/server 用于 Docker）
+build/
+!build/server
 
 # 开发文件
 *.log

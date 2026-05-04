@@ -4,14 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"personal-kb/internal/ai"
 	"personal-kb/internal/store"
-	"personal-kb/internal/util"
 
 	"github.com/gin-gonic/gin"
 )
@@ -164,7 +162,7 @@ func (h *Handlers) GenerateWikiPage(c *gin.Context) {
 		}
 	}
 
-	slug := util.Slugify(generatedTitle)
+	slug := store.Slugify(generatedTitle)
 	noteIDsJSON, _ := json.Marshal(noteIDList)
 
 	page := &store.WikiPage{
@@ -286,7 +284,6 @@ func (h *Handlers) AutoGenerateWiki(c *gin.Context) {
 
 		entities, err := h.knowledgeStore.GetAllEntityNames(ctx)
 		if err != nil || len(entities) == 0 {
-			log.Printf("[wiki] no entities found for auto-wiki")
 			return
 		}
 
@@ -297,7 +294,7 @@ func (h *Handlers) AutoGenerateWiki(c *gin.Context) {
 				continue
 			}
 
-			slug := util.Slugify(entity.EntityName)
+			slug := store.Slugify(entity.EntityName)
 			if _, err := h.knowledgeStore.GetWikiPage(ctx, slug); err == nil {
 				continue
 			}
@@ -326,7 +323,6 @@ func (h *Handlers) AutoGenerateWiki(c *gin.Context) {
 
 			content, err := provider.Generate(ctx, prompt)
 			if err != nil {
-				log.Printf("[wiki] failed to generate page for %s: %v", entity.EntityName, err)
 				continue
 			}
 
@@ -348,11 +344,9 @@ func (h *Handlers) AutoGenerateWiki(c *gin.Context) {
 			}
 
 			if err := h.knowledgeStore.SaveWikiPage(ctx, page); err != nil {
-				log.Printf("[wiki] failed to save page for %s: %v", entity.EntityName, err)
 				continue
 			}
 
-			log.Printf("[wiki] auto-generated page for entity: %s (%d notes)", entity.EntityName, len(matching))
 			generated++
 		}
 

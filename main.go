@@ -10,10 +10,9 @@ import (
 
 	"personal-kb/internal/api"
 	"personal-kb/internal/nas"
-	"personal-kb/internal/ollama"
 	"personal-kb/internal/store"
 	"personal-kb/internal/sync"
-	"personal-kb/web"
+	"personal-kb/frontend"
 
 	"github.com/gin-gonic/gin"
 )
@@ -27,7 +26,7 @@ func main() {
 
 	gin.SetMode(gin.ReleaseMode)
 
-	dbPath := envOrDefault("KB_DB_PATH", "knowledge.db")
+	dbPath := envOrDefault("KB_DB_PATH", "data/knowledge.db")
 	db, err := store.Open(dbPath)
 	if err != nil {
 		log.Fatalf("failed to open database: %v", err)
@@ -56,17 +55,6 @@ func main() {
 			log.Printf("[main] set NAS host from env: %s", nasHostEnv)
 		}
 	}
-
-	// Create Ollama client with default settings
-	ollamaURL, _ := settingsStore.GetSetting("ollama_url")
-	ollamaModel, _ := settingsStore.GetSetting("ollama_model")
-	if ollamaURL == "" {
-		ollamaURL = "http://localhost:11434"
-	}
-	if ollamaModel == "" {
-		ollamaModel = "qwen2"
-	}
-	ollamaClient := ollama.NewClient(ollamaURL, ollamaModel)
 
 	// Try to restore NAS session from settings
 	var authClient *nas.AuthClient
@@ -110,7 +98,6 @@ func main() {
 		knowledgeStore,
 		nasClient,
 		authClient,
-		ollamaClient,
 		syncService,
 	)
 

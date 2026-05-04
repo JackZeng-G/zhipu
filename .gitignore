@@ -1,17 +1,17 @@
-bin/
-*.exe
-*.exe~
-*.db
-*.db-journal
-*.db-shm
-*.db-wal
-web/node_modules/
-web/dist/
-.env
-tmp/
+# Runtime data
 data/
-.superpowers/
-docs/superpowers/
+
+# Build
+build/
+vendor/
+*.test
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Environment
+.env
 
 # IDE
 .idea/
@@ -23,9 +23,9 @@ docs/superpowers/
 .DS_Store
 Thumbs.db
 
+# Binary
+*.exe
+*.exe~
+
 # Logs
 *.log
-
-# Build
-vendor/
-*.test

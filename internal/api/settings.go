@@ -1,6 +1,7 @@
 package api
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -59,10 +60,6 @@ func (h *Handlers) UpdateSettings(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save ollama_url: " + err.Error()})
 			return
 		}
-		// Update the Ollama client's base URL
-		if h.ollamaClient != nil {
-			h.ollamaClient.SetBaseURL(req.OllamaURL)
-		}
 	}
 
 	if req.OllamaModel != "" {
@@ -70,10 +67,10 @@ func (h *Handlers) UpdateSettings(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save ollama_model: " + err.Error()})
 			return
 		}
-		// Update the Ollama client's model
-		if h.ollamaClient != nil {
-			h.ollamaClient.SetModel(req.OllamaModel)
-		}
+	}
+
+	if err := h.refreshActiveProvider(); err != nil {
+		log.Printf("[settings] failed to refresh provider: %v", err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true})

@@ -12,7 +12,6 @@ import (
 
 	"personal-kb/internal/ai"
 	"personal-kb/internal/store"
-	"personal-kb/internal/util"
 
 	"github.com/gin-gonic/gin"
 )
@@ -285,28 +284,18 @@ func (h *Handlers) indexAllNotes(provider ai.Provider) {
 	}
 	log.Printf("[index] starting full index of %d notes", len(notes))
 	var indexedIDs []string
-	for i, note := range notes {
+	for _, note := range notes {
 		if err := h.indexNote(ctx, provider, note.ID); err != nil {
-			log.Printf("[index] failed to index note %s: %v", note.ID, err)
 			continue
 		}
 		indexedIDs = append(indexedIDs, note.ID)
-		if (i+1)%10 == 0 {
-			log.Printf("[index] indexed %d/%d notes", i+1, len(notes))
-		}
 	}
 	h.knowledgeStore.LogActivity(ctx, "index", "", "", "full index completed", map[string]interface{}{"total_notes": len(notes), "indexed": len(indexedIDs)})
 	log.Printf("[index] full index completed (%d/%d notes)", len(indexedIDs), len(notes))
 
-	// Batch ingest: update concept pages from all indexed notes (sequential, not 177 goroutines)
-	log.Printf("[ingest] starting batch ingest for %d notes", len(indexedIDs))
-	for i, noteID := range indexedIDs {
+	for _, noteID := range indexedIDs {
 		h.ingestToWiki(noteID)
-		if (i+1)%20 == 0 {
-			log.Printf("[ingest] processed %d/%d notes", i+1, len(indexedIDs))
-		}
 	}
-	log.Printf("[ingest] batch ingest completed (%d notes)", len(indexedIDs))
 
 	// After full index, build relations between notes
 	go h.buildRelationsAsync()
@@ -390,23 +379,16 @@ func (h *Handlers) IndexNotesAsync(noteIDs []string) {
 
 		log.Printf("[hook] starting auto-index of %d notes", len(noteIDs))
 		var indexedIDs []string
-		for i, noteID := range noteIDs {
+		for _, noteID := range noteIDs {
 			if err := h.indexNote(ctx, provider, noteID); err != nil {
-				log.Printf("[hook] failed to index note %s: %v", noteID, err)
 				continue
 			}
 			indexedIDs = append(indexedIDs, noteID)
-			if (i+1)%10 == 0 {
-				log.Printf("[hook] indexed %d/%d notes", i+1, len(noteIDs))
-			}
 		}
 
-		// Batch ingest: update concept pages sequentially
-		log.Printf("[ingest] starting batch ingest for %d notes", len(indexedIDs))
 		for _, noteID := range indexedIDs {
 			h.ingestToWiki(noteID)
 		}
-		log.Printf("[ingest] batch ingest completed (%d notes)", len(indexedIDs))
 
 		// After indexing, build relations between notes
 		h.buildRelationsAsync()
@@ -528,11 +510,9 @@ func (h *Handlers) buildRelationsAsync() {
 			}})
 			saved++
 		}
-		log.Printf("[relations] batch %d-%d: found %d relations", batchStart, batchEnd, saved)
 	}
 
 	h.knowledgeStore.LogActivity(ctx, "build_relations", "", "", "auto cross-reference completed", nil)
-	log.Printf("[relations] cross-reference build completed")
 }
 
 // TranslateRelations translates all English relation reasons to Chinese.
@@ -552,7 +532,6 @@ func (h *Handlers) translateAllRelations(provider ai.Provider) {
 
 	relations, err := h.knowledgeStore.GetAllRelations(ctx)
 	if err != nil || len(relations) == 0 {
-		log.Printf("[translate] no relations to translate")
 		return
 	}
 
@@ -565,11 +544,9 @@ func (h *Handlers) translateAllRelations(provider ai.Provider) {
 	}
 
 	if len(toTranslate) == 0 {
-		log.Printf("[translate] all relations already in Chinese")
 		return
 	}
 
-	log.Printf("[translate] translating %d English relations to Chinese", len(toTranslate))
 
 	// Batch translate: group by 20
 	batchSize := 20
@@ -614,7 +591,6 @@ func (h *Handlers) translateAllRelations(provider ai.Provider) {
 				h.knowledgeStore.UpdateRelationReason(ctx, batch[j].ID, t)
 			}
 		}
-		log.Printf("[translate] translated %d-%d/%d", i+1, end, len(toTranslate))
 	}
 
 	h.knowledgeStore.LogActivity(ctx, "translate", "", "",
@@ -662,12 +638,11 @@ func (h *Handlers) ingestToWiki(noteID string) {
 	conceptNames := make(map[string]bool)
 	for _, e := range entities {
 		conceptNames[e.EntityName] = true
-		slug := util.Slugify(e.EntityName)
+		slug := store.Slugify(e.EntityName)
 
 		// Use exact match query (efficient) instead of LIKE search
 		noteIDs, err := h.knowledgeStore.GetNoteIDsByEntityName(ctx, e.EntityName)
 		if err != nil {
-			log.Printf("[ingest] failed to get notes for entity %s: %v", e.EntityName, err)
 			continue
 		}
 		sourceCount := len(noteIDs)
@@ -716,14 +691,13 @@ func (h *Handlers) ingestToWiki(noteID string) {
 			concept.Contradictions = existing.Contradictions
 		}
 		if err := h.knowledgeStore.SaveWikiConcept(ctx, concept); err != nil {
-			log.Printf("[ingest] failed to save concept %s: %v", slug, err)
 		}
 	}
 
 	// Step 2: Build co-occurrence relations between concepts in this note
 	var conceptSlugs []string
 	for name := range conceptNames {
-		conceptSlugs = append(conceptSlugs, util.Slugify(name))
+		conceptSlugs = append(conceptSlugs, store.Slugify(name))
 	}
 	for i := 0; i < len(conceptSlugs); i++ {
 		for j := i + 1; j < len(conceptSlugs); j++ {
@@ -759,7 +733,6 @@ func (h *Handlers) ingestToWiki(noteID string) {
 		h.knowledgeStore.LogActivity(ctx, "ingest", "note", noteID,
 			fmt.Sprintf("INGEST: updated %d concepts", len(conceptNames)),
 			map[string]interface{}{"concepts": len(conceptNames)})
-		log.Printf("[ingest] processed note %s: %d concepts", noteID, len(conceptNames))
 }
 
 // ResetIndexes deletes all index data and wiki pages.

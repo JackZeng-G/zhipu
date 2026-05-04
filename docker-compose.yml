@@ -17,12 +17,11 @@ services:
     environment:
       # 服务端口
       - KB_PORT=8080
-      # 数据库路径
       - KB_DB_PATH=/data/knowledge.db
       # NAS 主机（可选，首次启动时使用）
       - KB_NAS_HOST=${KB_NAS_HOST:-}
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/api/settings"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3

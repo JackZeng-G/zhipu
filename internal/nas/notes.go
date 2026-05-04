@@ -3,7 +3,6 @@ package nas
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/url"
 	"strconv"
 )
@@ -42,7 +41,6 @@ func (c *NoteStationClient) ListNotebooks() ([]Notebook, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse notebooks: %w", err)
 	}
-	log.Printf("[nas] ListNotebooks: fetched %d notebooks, body_len=%d", len(notebooks), len(body))
 	return notebooks, nil
 }
 
@@ -84,13 +82,6 @@ func (c *NoteStationClient) ListNotes(offset, limit int) (*NoteListResponse, err
 	if err != nil {
 		return nil, fmt.Errorf("parse notes: %w", err)
 	}
-	// Also log the raw total to detect parsing issues
-	var rawTotal struct {
-		Total int `json:"total"`
-	}
-	json.Unmarshal(result.Data, &rawTotal)
-	log.Printf("[nas] ListNotes offset=%d limit=%d raw_total=%d parsed_total=%d parsed_notes=%d body_len=%d",
-		offset, limit, rawTotal.Total, parsed.Total, len(parsed.Notes), len(body))
 	return parsed, nil
 }
 

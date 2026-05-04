@@ -48,21 +48,14 @@ func (h *Handlers) executeReflect(provider ai.Provider) {
 
 	log.Printf("[reflect] starting REFLECT pipeline")
 
-	log.Printf("[reflect] Stage 0: counter-evidence search")
 	h.reflectStage0(ctx, provider)
-
-	log.Printf("[reflect] Stage 1: pattern scan")
 	patterns := h.reflectStage1(ctx)
-
-	log.Printf("[reflect] Stage 2: deep synthesis")
 	h.reflectStage2(ctx, provider, patterns)
-
-	log.Printf("[reflect] Stage 3: gap analysis")
 	h.reflectStage3(ctx)
 
 	h.knowledgeStore.LogActivity(ctx, "reflect", "", "",
 		"REFLECT 完成（4 阶段）", nil)
-	log.Printf("[reflect] REFLECT pipeline completed")
+	log.Printf("[reflect] completed")
 }
 
 func (h *Handlers) reflectStage0(ctx context.Context, provider ai.Provider) {
@@ -116,7 +109,6 @@ func (h *Handlers) reflectStage0(ctx context.Context, provider ai.Provider) {
 
 		resp, err := provider.Generate(ctx, prompt)
 		if err != nil {
-			log.Printf("[reflect] Stage 0 failed for %s: %v", concept.Slug, err)
 			continue
 		}
 
@@ -268,7 +260,6 @@ func (h *Handlers) reflectStage2(ctx context.Context, provider ai.Provider, patt
 		}
 
 		h.knowledgeStore.SaveWikiSynthesis(ctx, syn)
-		log.Printf("[reflect] Stage 2: generated synthesis for %s", c.Slug)
 	}
 }
 
@@ -302,5 +293,4 @@ func (h *Handlers) reflectStage3(ctx context.Context) {
 		OutputType: "gap",
 	}
 	h.knowledgeStore.SaveWikiOutput(ctx, output)
-	log.Printf("[reflect] Stage 3: gap report saved as %s", slug)
 }

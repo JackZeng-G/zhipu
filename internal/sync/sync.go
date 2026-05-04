@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -150,7 +149,6 @@ func (s *SyncService) syncNotes(ctx context.Context) (map[string]bool, error) {
 		offset += limit
 	}
 
-	log.Printf("[sync] total synced: %d notes", len(nasNoteIDs))
 	return nasNoteIDs, nil
 }
 
