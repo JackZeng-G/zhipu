@@ -31,7 +31,7 @@
 **要求**: Go 1.26+、Node.js 20.19+ 或 22.12+
 
 ```bash
-git clone http://zqyfn.x64.baby:20011/zqyhqw/zhipu.git
+git clone https://github.com/your-repo/zhipu.git
 cd zhipu
 make build-all    # 构建前端 + 后端
 ./build/server
