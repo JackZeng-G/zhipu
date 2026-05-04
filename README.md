@@ -34,7 +34,7 @@
 git clone https://github.com/your-repo/zhipu.git
 cd zhipu
 make build-all    # 构建前端 + 后端
-./build/server
+./build/zhipu
 ```
 
 访问 `http://localhost:8080`

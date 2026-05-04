@@ -1,6 +1,6 @@
 .PHONY: dev build test clean frontend build-all dev-frontend dev-backend
 
-BINARY := build/server
+BINARY := build/zhipu
 
 frontend:
 	cd frontend && npm run build

@@ -13,7 +13,7 @@ RUN mkdir -p /app /data/images && \
 WORKDIR /app
 
 # 复制预编译的二进制文件
-COPY --chown=app:app build/server /app/server
+COPY --chown=app:app build/zhipu /app/zhipu
 
 # 暴露端口
 EXPOSE 8080
@@ -29,4 +29,4 @@ VOLUME ["/data"]
 USER app
 
 # 运行服务
-ENTRYPOINT ["/app/server"]
+ENTRYPOINT ["/app/zhipu"]
