@@ -214,6 +214,11 @@ func SetupRouter(h *Handlers) *gin.Engine {
 
 		// Notes endpoints
 		api.GET("/notebooks", h.ListNotebooks)
+		api.POST("/notebooks", h.CreateNotebook)
+		api.PUT("/notebooks/:id/stack", h.MoveNotebookToStack)
+		api.GET("/stacks", h.ListStacks)
+		api.PUT("/stacks/rename", h.RenameStack)
+		api.DELETE("/stacks", h.DeleteStack)
 		api.GET("/notes", h.ListNotes)
 		api.GET("/notes/:id", h.GetNote)
 		api.GET("/nas/image", h.NASImageProxy)

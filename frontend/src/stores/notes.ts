@@ -1,10 +1,14 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { getNotebooks, getNotes, getNote, summarizeNote, aiEdit } from '@/api'
+import {
+  getNotebooks, getNotes, getNote, summarizeNote, aiEdit,
+  createNotebook, moveNotebookToStack, renameStack, deleteStack, getStacks
+} from '@/api'
 
 export interface Notebook {
   id: string
   title: string
+  stack: string | null
   parent_id: string | null
   children?: Notebook[]
 }
@@ -98,6 +102,59 @@ export const useNotesStore = defineStore('notes', () => {
     }
   }
 
+  async function doCreateNotebook(title: string, stack?: string) {
+    try {
+      await createNotebook({ title, stack })
+      await fetchNotebooks()
+      return true
+    } catch (e: any) {
+      error.value = e.response?.data?.error || e.message || 'Failed to create notebook'
+      return false
+    }
+  }
+
+  async function doMoveNotebookToStack(notebookId: string, stack: string) {
+    try {
+      await moveNotebookToStack(notebookId, stack)
+      await fetchNotebooks()
+      return true
+    } catch (e: any) {
+      error.value = e.response?.data?.error || e.message || 'Failed to move notebook'
+      return false
+    }
+  }
+
+  async function doRenameStack(oldName: string, newName: string) {
+    try {
+      await renameStack(oldName, newName)
+      await fetchNotebooks()
+      return true
+    } catch (e: any) {
+      error.value = e.response?.data?.error || e.message || 'Failed to rename stack'
+      return false
+    }
+  }
+
+  async function doDeleteStack(name: string) {
+    try {
+      await deleteStack(name)
+      await fetchNotebooks()
+      return true
+    } catch (e: any) {
+      error.value = e.response?.data?.error || e.message || 'Failed to delete stack'
+      return false
+    }
+  }
+
+  async function fetchStackList() {
+    try {
+      const res = await getStacks()
+      return (res.data || []) as string[]
+    } catch {
+      return []
+    }
+  }
+
   return {
     notebooks,
     notes,
@@ -110,6 +167,11 @@ export const useNotesStore = defineStore('notes', () => {
     fetchNotes,
     fetchNote,
     summarize,
-    edit
+    edit,
+    doCreateNotebook,
+    doMoveNotebookToStack,
+    doRenameStack,
+    doDeleteStack,
+    fetchStackList
   }
 })

@@ -9,11 +9,12 @@ import (
 
 // Notebook represents a notebook (folder) that contains notes.
 type Notebook struct {
-	ID            string `db:"id" json:"id"`
-	Title         string `db:"title" json:"title"`
+	ID            string  `db:"id" json:"id"`
+	Title         string  `db:"title" json:"title"`
 	ParentID      *string `db:"parent_id" json:"parent_id"`
-	CreatedTime   int64  `db:"created_time" json:"created_time"`
-	ModifiedTime  int64  `db:"modified_time" json:"modified_time"`
+	Stack         *string `db:"stack" json:"stack"`
+	CreatedTime   int64   `db:"created_time" json:"created_time"`
+	ModifiedTime  int64   `db:"modified_time" json:"modified_time"`
 }
 
 // Note represents a single note within a notebook.
@@ -28,6 +29,8 @@ type Note struct {
 	ModifiedTime  int64   `db:"modified_time" json:"modified_time"`
 	SyncedAt      *int64  `db:"synced_at" json:"synced_at"`
 	ContentHash   string  `db:"content_hash" json:"content_hash"`
+	NasVer        *string `db:"nas_ver" json:"nas_ver"`
+	NasLinkID     *string `db:"nas_link_id" json:"nas_link_id"`
 }
 
 // NotesStore provides CRUD for notes and notebooks.
@@ -140,11 +143,12 @@ func (s *NotesStore) ListNotebooksWithNotes(ctx context.Context) ([]Notebook, er
 // SaveNotebook inserts or updates a notebook by ID (upsert).
 func (s *NotesStore) SaveNotebook(ctx context.Context, nb *Notebook) error {
 	_, err := s.db.NamedExecContext(ctx, `
-		INSERT INTO notebooks (id, title, parent_id, created_time, modified_time)
-		VALUES (:id, :title, :parent_id, :created_time, :modified_time)
+		INSERT INTO notebooks (id, title, parent_id, stack, created_time, modified_time)
+		VALUES (:id, :title, :parent_id, :stack, :created_time, :modified_time)
 		ON CONFLICT(id) DO UPDATE SET
 			title          = excluded.title,
 			parent_id      = excluded.parent_id,
+			stack          = excluded.stack,
 			created_time   = excluded.created_time,
 			modified_time  = excluded.modified_time
 	`, nb)
@@ -161,4 +165,43 @@ func (s *NotesStore) DeleteNotebook(ctx context.Context, id string) error {
 		return fmt.Errorf("delete notebook %s: %w", id, err)
 	}
 	return nil
+}
+
+// ListStacks returns distinct stack names.
+func (s *NotesStore) ListStacks(ctx context.Context) ([]string, error) {
+	var stacks []string
+	err := s.db.SelectContext(ctx, &stacks,
+		"SELECT DISTINCT stack FROM notebooks WHERE stack IS NOT NULL AND stack != '' ORDER BY stack")
+	if err != nil {
+		return nil, fmt.Errorf("list stacks: %w", err)
+	}
+	return stacks, nil
+}
+
+// UpdateNotebookStack changes the stack of a notebook.
+func (s *NotesStore) UpdateNotebookStack(ctx context.Context, id string, stack *string) error {
+	_, err := s.db.ExecContext(ctx, "UPDATE notebooks SET stack = ? WHERE id = ?", stack, id)
+	if err != nil {
+		return fmt.Errorf("update notebook stack %s: %w", id, err)
+	}
+	return nil
+}
+
+// RenameStack renames a stack across all notebooks.
+func (s *NotesStore) RenameStack(ctx context.Context, oldName, newName string) (int64, error) {
+	result, err := s.db.ExecContext(ctx, "UPDATE notebooks SET stack = ? WHERE stack = ?", newName, oldName)
+	if err != nil {
+		return 0, fmt.Errorf("rename stack %s to %s: %w", oldName, newName, err)
+	}
+	return result.RowsAffected()
+}
+
+// GetNotebooksByStack returns all notebooks in a given stack.
+func (s *NotesStore) GetNotebooksByStack(ctx context.Context, stackName string) ([]Notebook, error) {
+	var notebooks []Notebook
+	if err := s.db.SelectContext(ctx, &notebooks,
+		"SELECT * FROM notebooks WHERE stack = ? ORDER BY title", stackName); err != nil {
+		return nil, fmt.Errorf("get notebooks by stack %s: %w", stackName, err)
+	}
+	return notebooks, nil
 }

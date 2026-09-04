@@ -227,3 +227,101 @@ func (c *NoteStationClient) GetInfo() (hash string, uid int, username string, er
 	return result.Data.Hash, result.Data.UID, result.Data.Username, nil
 }
 
+
+// CreateNotebook creates a new notebook on Synology Note Station.
+// Returns the object_id of the newly created notebook.
+func (c *NoteStationClient) CreateNotebook(title, stack string) (string, error) {
+	if !c.auth.IsLoggedIn() {
+		return "", fmt.Errorf("not logged in")
+	}
+	params := url.Values{}
+	params.Set("api", "SYNO.NoteStation.Notebook")
+	params.Set("version", "2")
+	params.Set("method", "create")
+	params.Set("title", title)
+	if stack != "" {
+		params.Set("stack", stack)
+	}
+	resp, err := c.auth.Post(params)
+	if err != nil {
+		return "", fmt.Errorf("create notebook request: %w", err)
+	}
+	body, err := readBody(resp)
+	if err != nil {
+		return "", fmt.Errorf("read create notebook response: %w", err)
+	}
+	var result synoResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return "", fmt.Errorf("decode create notebook response: %w", err)
+	}
+	if !result.Success {
+		return "", fmt.Errorf("create notebook failed: %s", synoErrorMessage(result.Error))
+	}
+	var data struct {
+		ObjectID string `json:"object_id"`
+	}
+	if err := json.Unmarshal(result.Data, &data); err != nil {
+		return "", fmt.Errorf("parse create notebook data: %w", err)
+	}
+	return data.ObjectID, nil
+}
+
+// EditNotebook updates a notebook's title and/or stack on Synology Note Station.
+func (c *NoteStationClient) EditNotebook(objectID, title, stack string) error {
+	if !c.auth.IsLoggedIn() {
+		return fmt.Errorf("not logged in")
+	}
+	params := url.Values{}
+	params.Set("api", "SYNO.NoteStation.Notebook")
+	params.Set("version", "2")
+	params.Set("method", "edit")
+	params.Set("object_id", objectID)
+	if title != "" {
+		params.Set("title", title)
+	}
+	params.Set("stack", stack)
+	resp, err := c.auth.Post(params)
+	if err != nil {
+		return fmt.Errorf("edit notebook request: %w", err)
+	}
+	body, err := readBody(resp)
+	if err != nil {
+		return fmt.Errorf("read edit notebook response: %w", err)
+	}
+	var result synoResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return fmt.Errorf("decode edit notebook response: %w", err)
+	}
+	if !result.Success {
+		return fmt.Errorf("edit notebook failed: %s", synoErrorMessage(result.Error))
+	}
+	return nil
+}
+
+// DeleteNotebook removes a notebook from Synology Note Station.
+func (c *NoteStationClient) DeleteNotebook(objectID string) error {
+	if !c.auth.IsLoggedIn() {
+		return fmt.Errorf("not logged in")
+	}
+	params := url.Values{}
+	params.Set("api", "SYNO.NoteStation.Notebook")
+	params.Set("version", "2")
+	params.Set("method", "delete")
+	params.Set("object_id", objectID)
+	resp, err := c.auth.Post(params)
+	if err != nil {
+		return fmt.Errorf("delete notebook request: %w", err)
+	}
+	body, err := readBody(resp)
+	if err != nil {
+		return fmt.Errorf("read delete notebook response: %w", err)
+	}
+	var result synoResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return fmt.Errorf("decode delete notebook response: %w", err)
+	}
+	if !result.Success {
+		return fmt.Errorf("delete notebook failed: %s", synoErrorMessage(result.Error))
+	}
+	return nil
+}

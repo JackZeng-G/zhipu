@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, h } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
   NInput,
@@ -12,6 +12,9 @@ import {
   NCollapse,
   NCollapseItem,
   NTag,
+  NModal,
+  NSelect,
+  NDropdown,
   useMessage
 } from 'naive-ui'
 import type { TreeOption } from 'naive-ui'
@@ -33,6 +36,30 @@ const summarizing = ref(false)
 const editing = ref(false)
 const detailLoading = ref(false)
 
+// 新建笔记本 modal
+const showCreateModal = ref(false)
+const newNotebookTitle = ref('')
+const newNotebookStack = ref('')
+const stackOptions = ref<{ label: string; value: string }[]>([])
+
+// 右键菜单
+const contextMenuOptions = ref<any[]>([])
+const contextMenuX = ref(0)
+const contextMenuY = ref(0)
+const showContextMenu = ref(false)
+const contextMenuTarget = ref<TreeOption | null>(null)
+
+// 移动到书架 modal
+const showMoveModal = ref(false)
+const moveTargetId = ref('')
+const moveTargetStack = ref('')
+const moveStackOptions = ref<{ label: string; value: string }[]>([])
+
+// 重命名书架 modal
+const showRenameStackModal = ref(false)
+const renameOldName = ref('')
+const renameNewName = ref('')
+
 const filteredNotes = computed(() => {
   if (!searchQuery.value) return notesStore.notes
   const q = searchQuery.value.toLowerCase()
@@ -40,18 +67,41 @@ const filteredNotes = computed(() => {
 })
 
 function notebooksToTreeOptions(notebooks: Notebook[]): TreeOption[] {
-  return notebooks.map((nb) => ({
-    key: nb.id,
-    label: nb.title,
-    children: nb.children ? notebooksToTreeOptions(nb.children) : undefined
-  }))
+  const stackMap = new Map<string, TreeOption>()
+  const rootNodes: TreeOption[] = []
+
+  for (const nb of notebooks) {
+    const node: TreeOption = {
+      key: nb.id,
+      label: nb.title,
+    }
+    if (nb.stack) {
+      if (!stackMap.has(nb.stack)) {
+        stackMap.set(nb.stack, {
+          key: 'stack:' + nb.stack,
+          label: nb.stack,
+          prefix: () => h('span', { style: 'margin-right:4px' }, '🗂'),
+          children: [],
+        })
+      }
+      const group = stackMap.get(nb.stack)
+      if (group && group.children) {
+        group.children.push(node)
+      }
+    } else {
+      rootNodes.push(node)
+    }
+  }
+
+  return [...Array.from(stackMap.values()), ...rootNodes]
 }
 
 const treeOptions = computed(() => notebooksToTreeOptions(notesStore.notebooks))
 
 function handleTreeSelect(keys: string[]) {
-  if (keys.length > 0) {
-    notesStore.fetchNotes(keys[0], 1, notesStore.pagination.pageSize)
+  const key = keys[0]
+  if (key && !key.startsWith('stack:')) {
+    notesStore.fetchNotes(key, 1, notesStore.pagination.pageSize)
   }
 }
 
@@ -122,6 +172,93 @@ async function handleIndexNote() {
   }
 }
 
+// 新建笔记本
+async function openCreateModal() {
+  newNotebookTitle.value = ''
+  newNotebookStack.value = ''
+  const stacks = await notesStore.fetchStackList()
+  stackOptions.value = stacks.map(s => ({ label: s, value: s }))
+  stackOptions.value.push({ label: '(无书架)', value: '' })
+  showCreateModal.value = true
+}
+
+async function handleCreate() {
+  if (!newNotebookTitle.value.trim()) return
+  const ok = await notesStore.doCreateNotebook(newNotebookTitle.value.trim(), newNotebookStack.value || undefined)
+  if (ok) {
+    message.success('笔记本已创建')
+    showCreateModal.value = false
+  } else {
+    message.error(notesStore.error || '创建失败')
+  }
+}
+
+// 右键菜单
+function handleNodeProps({ option }: { option: TreeOption }) {
+  return {
+    onContextmenu(e: MouseEvent) {
+      e.preventDefault()
+      contextMenuTarget.value = option
+      const isStack = String(option.key).startsWith('stack:')
+      if (isStack) {
+        const stackName = String(option.key).slice(6)
+        contextMenuOptions.value = [
+          { label: '重命名书架', key: 'rename-stack' },
+          { label: '删除书架', key: 'delete-stack' },
+        ]
+        renameOldName.value = stackName
+      } else {
+        contextMenuOptions.value = [
+          { label: '移动到书架', key: 'move-to-stack' },
+        ]
+        moveTargetId.value = String(option.key)
+      }
+      contextMenuX.value = e.clientX
+      contextMenuY.value = e.clientY
+      showContextMenu.value = true
+    }
+  }
+}
+
+async function handleContextMenuSelect(key: string) {
+  showContextMenu.value = false
+  if (key === 'rename-stack') {
+    renameNewName.value = renameOldName.value
+    showRenameStackModal.value = true
+  } else if (key === 'delete-stack') {
+    const ok = await notesStore.doDeleteStack(renameOldName.value)
+    if (ok) message.success('书架已删除')
+    else message.error(notesStore.error || '删除失败')
+  } else if (key === 'move-to-stack') {
+    const stacks = await notesStore.fetchStackList()
+    moveStackOptions.value = stacks.map(s => ({ label: s, value: s }))
+    moveStackOptions.value.unshift({ label: '(无书架)', value: '' })
+    moveTargetStack.value = ''
+    showMoveModal.value = true
+  }
+}
+
+async function handleMoveToStack() {
+  const ok = await notesStore.doMoveNotebookToStack(moveTargetId.value, moveTargetStack.value)
+  if (ok) {
+    message.success('已移动')
+    showMoveModal.value = false
+  } else {
+    message.error(notesStore.error || '移动失败')
+  }
+}
+
+async function handleRenameStack() {
+  if (!renameNewName.value.trim()) return
+  const ok = await notesStore.doRenameStack(renameOldName.value, renameNewName.value.trim())
+  if (ok) {
+    message.success('书架已重命名')
+    showRenameStackModal.value = false
+  } else {
+    message.error(notesStore.error || '重命名失败')
+  }
+}
+
 function formatDate(ts: number) {
   return new Date(ts * 1000).toLocaleString('zh-CN', {
     year: 'numeric', month: '2-digit', day: '2-digit',
@@ -158,6 +295,7 @@ onMounted(async () => {
     <div class="panel-notebooks">
       <div class="panel-header">
         <h3 class="panel-title">笔记本</h3>
+        <NButton size="tiny" quaternary @click="openCreateModal">+</NButton>
       </div>
       <div class="notebook-tree-wrapper">
         <NTree
@@ -165,10 +303,58 @@ onMounted(async () => {
           block-line
           selectable
           :default-expand-all="true"
+          :node-props="handleNodeProps"
           @update:selected-keys="handleTreeSelect"
         />
       </div>
     </div>
+
+    <!-- 右键菜单 -->
+    <NDropdown
+      placement="bottom-start"
+      :options="contextMenuOptions"
+      :x="contextMenuX"
+      :y="contextMenuY"
+      :show="showContextMenu"
+      @select="handleContextMenuSelect"
+      @clickoutside="showContextMenu = false"
+    />
+
+    <!-- 新建笔记本 Modal -->
+    <NModal v-model:show="showCreateModal" preset="card" title="新建笔记本" style="max-width:400px">
+      <NSpace vertical :size="12">
+        <NInput v-model:value="newNotebookTitle" placeholder="笔记本名称" />
+        <NSelect v-model:value="newNotebookStack" :options="stackOptions" placeholder="选择书架（可选）" clearable />
+      </NSpace>
+      <template #footer>
+        <NSpace justify="end">
+          <NButton @click="showCreateModal = false">取消</NButton>
+          <NButton type="primary" @click="handleCreate" :disabled="!newNotebookTitle.trim()">创建</NButton>
+        </NSpace>
+      </template>
+    </NModal>
+
+    <!-- 移动到书架 Modal -->
+    <NModal v-model:show="showMoveModal" preset="card" title="移动到书架" style="max-width:400px">
+      <NSelect v-model:value="moveTargetStack" :options="moveStackOptions" placeholder="选择书架" />
+      <template #footer>
+        <NSpace justify="end">
+          <NButton @click="showMoveModal = false">取消</NButton>
+          <NButton type="primary" @click="handleMoveToStack">确认</NButton>
+        </NSpace>
+      </template>
+    </NModal>
+
+    <!-- 重命名书架 Modal -->
+    <NModal v-model:show="showRenameStackModal" preset="card" title="重命名书架" style="max-width:400px">
+      <NInput v-model:value="renameNewName" placeholder="新书架名称" />
+      <template #footer>
+        <NSpace justify="end">
+          <NButton @click="showRenameStackModal = false">取消</NButton>
+          <NButton type="primary" @click="handleRenameStack" :disabled="!renameNewName.trim()">确认</NButton>
+        </NSpace>
+      </template>
+    </NModal>
 
     <!-- 中栏：笔记列表 -->
     <div class="panel-list">
@@ -343,6 +529,9 @@ onMounted(async () => {
 
 .panel-header {
   padding: 20px 20px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .panel-title {

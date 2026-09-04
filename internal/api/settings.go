@@ -20,6 +20,8 @@ type settingsResponse struct {
 type updateSettingsRequest struct {
 	OllamaURL   string `json:"ollama_url"`
 	OllamaModel string `json:"ollama_model"`
+	NASUsername string `json:"nas_username"`
+	NASPassword string `json:"nas_password_encrypted"`
 }
 
 // GetSettings returns current application settings.
@@ -65,6 +67,20 @@ func (h *Handlers) UpdateSettings(c *gin.Context) {
 	if req.OllamaModel != "" {
 		if err := h.settingsStore.SetSetting("ollama_model", req.OllamaModel); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save ollama_model: " + err.Error()})
+			return
+		}
+	}
+
+	if req.NASUsername != "" {
+		if err := h.settingsStore.SetSetting("nas_username", req.NASUsername); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save nas_username: " + err.Error()})
+			return
+		}
+	}
+
+	if req.NASPassword != "" {
+		if err := h.settingsStore.SetSetting("nas_password_encrypted", req.NASPassword); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save nas_password_encrypted: " + err.Error()})
 			return
 		}
 	}

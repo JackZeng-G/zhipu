@@ -174,6 +174,11 @@ func (a *AuthClient) Get(params url.Values) (*http.Response, error) {
 	return a.get(params)
 }
 
+// Post sends a POST request with the given form parameters (exported).
+func (a *AuthClient) Post(params url.Values) (*http.Response, error) {
+	return a.post(params)
+}
+
 // get sends a GET request with the given query parameters.
 // It adds the session cookie if logged in.
 func (a *AuthClient) get(params url.Values) (*http.Response, error) {

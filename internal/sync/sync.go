@@ -272,6 +272,10 @@ func (s *SyncService) needsUpdate(ctx context.Context, nasNote *nas.Note) (bool,
 // nasToStoreNotebook converts a NAS notebook to a store notebook.
 func nasToStoreNotebook(nb *nas.Notebook) *store.Notebook {
 	var parentID *string
+	var stack *string
+	if nb.Stack != "" {
+		stack = &nb.Stack
+	}
 	if nb.ParentID != "" {
 		parentID = &nb.ParentID
 	}
@@ -280,6 +284,7 @@ func nasToStoreNotebook(nb *nas.Notebook) *store.Notebook {
 		ID:           nb.ID,
 		Title:        nb.Title,
 		ParentID:     parentID,
+		Stack:        stack,
 		CreatedTime:  nb.CreatedTime,
 		ModifiedTime: nb.ModifiedTime,
 	}

@@ -56,6 +56,15 @@ func main() {
 		}
 	}
 
+	// Set default NAS credentials for testing
+	if v, _ := settingsStore.GetSetting("nas_host"); v == "" {
+		settingsStore.SetSetting("nas_host", "dsm.hcmedia.asia")
+		settingsStore.SetSetting("nas_port", "5001")
+		settingsStore.SetSetting("nas_username", "testapi")
+		settingsStore.SetSetting("nas_password_encrypted", "123456")
+		log.Printf("[main] set default NAS credentials for testing")
+	}
+
 	// Try to restore NAS session from settings
 	var authClient *nas.AuthClient
 	var nasClient *nas.NoteStationClient

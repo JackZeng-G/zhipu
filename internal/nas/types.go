@@ -7,6 +7,7 @@ type Notebook struct {
 	ID            string `json:"object_id"`
 	Title         string `json:"title"`
 	ParentID      string `json:"-"`
+	Stack         string `json:"-"`
 	CreatedTime   int64  `json:"ctime"`
 	ModifiedTime  int64  `json:"mtime"`
 }
@@ -89,6 +90,7 @@ func parseNotebooks(data json.RawMessage) ([]Notebook, error) {
 	for i, r := range raw.Notebooks {
 		notebooks[i] = Notebook{
 			ID:            r.ObjectID,
+			Stack:         r.Stack,
 			Title:         r.Title,
 			CreatedTime:   r.CTime,
 			ModifiedTime:  r.MTime,

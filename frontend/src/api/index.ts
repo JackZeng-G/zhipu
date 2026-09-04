@@ -11,6 +11,11 @@ export const syncNAS = () => api.post('/nas/sync')
 
 // Notes
 export const getNotebooks = () => api.get('/notebooks')
+export const createNotebook = (data: { title: string; stack?: string }) => api.post('/notebooks', data)
+export const moveNotebookToStack = (id: string, stack: string) => api.put(`/notebooks/${id}/stack`, { stack })
+export const getStacks = () => api.get('/stacks')
+export const renameStack = (oldName: string, newName: string) => api.put('/stacks/rename', { old_name: oldName, new_name: newName })
+export const deleteStack = (name: string) => api.delete('/stacks', { params: { name } })
 export const getNotes = (params: { notebook_id?: string; page?: number; page_size?: number }) =>
   api.get('/notes', { params })
 export const getNote = (id: string) => api.get(`/notes/${id}`)

@@ -233,6 +233,9 @@ func Migrate(db *sqlx.DB) error {
 		"ALTER TABLE wiki_concepts ADD COLUMN confidence_pending INTEGER DEFAULT 0",
 		"ALTER TABLE wiki_concepts ADD COLUMN redirect_to TEXT DEFAULT ''",
 		"ALTER TABLE notes ADD COLUMN content_hash TEXT",
+		"ALTER TABLE notes ADD COLUMN nas_ver TEXT",
+		"ALTER TABLE notes ADD COLUMN nas_link_id TEXT",
+		"ALTER TABLE notebooks ADD COLUMN stack TEXT",
 	}
 	for _, m := range migrations {
 		db.Exec(m) // ignore error if column already exists

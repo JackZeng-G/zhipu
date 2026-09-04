@@ -2,18 +2,21 @@ package api
 
 import (
 	"context"
+	"fmt"
+	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"personal-kb/internal/store"
 
 	"github.com/gin-gonic/gin"
 )
 
-// ListNotebooks returns all notebooks that contain at least one note.
+// ListNotebooks returns all all notebooks.
 func (h *Handlers) ListNotebooks(c *gin.Context) {
 	ctx := context.Background()
-	notebooks, err := h.notesStore.ListNotebooksWithNotes(ctx)
+	notebooks, err := h.notesStore.ListNotebooks(ctx)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list notebooks: " + err.Error()})
 		return
@@ -22,6 +25,195 @@ func (h *Handlers) ListNotebooks(c *gin.Context) {
 		notebooks = []store.Notebook{}
 	}
 	c.JSON(http.StatusOK, notebooks)
+}
+
+// ListStacks returns all distinct stack names.
+func (h *Handlers) ListStacks(c *gin.Context) {
+	ctx := context.Background()
+	stacks, err := h.notesStore.ListStacks(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if stacks == nil {
+		stacks = []string{}
+	}
+	c.JSON(http.StatusOK, stacks)
+}
+
+// CreateNotebook creates a new notebook on NAS and saves locally.
+func (h *Handlers) CreateNotebook(c *gin.Context) {
+	var req struct {
+		Title string `json:"title" binding:"required"`
+		Stack string `json:"stack"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx := context.Background()
+	now := time.Now().Unix()
+	var nbID string
+
+	if h.nasClient != nil && h.authClient != nil {
+		if !h.authClient.IsLoggedIn() {
+			h.reconnectNAS()
+		}
+		if h.authClient.IsLoggedIn() {
+			id, err := h.nasClient.CreateNotebook(req.Title, req.Stack)
+			if err != nil {
+				log.Printf("[api] NAS create notebook failed: %v", err)
+				h.reconnectNAS()
+				if h.authClient.IsLoggedIn() {
+					id, err = h.nasClient.CreateNotebook(req.Title, req.Stack)
+				}
+			}
+			if err == nil {
+				nbID = id
+			} else {
+				log.Printf("[api] NAS create notebook failed after retry: %v", err)
+				c.JSON(http.StatusBadGateway, gin.H{"error": "NAS 操作失败"})
+				return
+			}
+		}
+	}
+	if nbID == "" {
+		nbID = fmt.Sprintf("local_nb_%d", now)
+	}
+
+	var stackPtr *string
+	if req.Stack != "" {
+		stackPtr = &req.Stack
+	}
+	nb := &store.Notebook{
+		ID:            nbID,
+		Title:         req.Title,
+		Stack:         stackPtr,
+		CreatedTime:   now,
+		ModifiedTime:  now,
+	}
+	if err := h.notesStore.SaveNotebook(ctx, nb); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, nb)
+}
+
+// RenameStack renames a stack across all notebooks (NAS + local).
+func (h *Handlers) RenameStack(c *gin.Context) {
+	var req struct {
+		OldName string `json:"old_name" binding:"required"`
+		NewName string `json:"new_name" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx := context.Background()
+	if h.nasClient != nil && h.authClient != nil && h.authClient.IsLoggedIn() {
+		notebooks, err := h.notesStore.GetNotebooksByStack(ctx, req.OldName)
+		if err == nil {
+			for _, nb := range notebooks {
+				if err := h.nasClient.EditNotebook(nb.ID, nb.Title, req.NewName); err != nil {
+					log.Printf("[api] NAS rename stack for notebook %s failed: %v", nb.ID, err)
+				}
+			}
+		}
+	}
+
+	affected, err := h.notesStore.RenameStack(ctx, req.OldName, req.NewName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "affected": affected})
+}
+
+// DeleteStack removes stack association from all notebooks.
+func (h *Handlers) DeleteStack(c *gin.Context) {
+	name := c.Query("name")
+	if name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "stack name is required"})
+		return
+	}
+
+	ctx := context.Background()
+	if h.nasClient != nil && h.authClient != nil && h.authClient.IsLoggedIn() {
+		notebooks, err := h.notesStore.GetNotebooksByStack(ctx, name)
+		if err == nil {
+			for _, nb := range notebooks {
+				if err := h.nasClient.EditNotebook(nb.ID, nb.Title, ""); err != nil {
+					log.Printf("[api] NAS clear stack for notebook %s failed: %v", nb.ID, err)
+				}
+			}
+		}
+	}
+
+	affected, err := h.notesStore.RenameStack(ctx, name, "")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "affected": affected})
+}
+
+// MoveNotebookToStack changes which stack a notebook belongs to.
+func (h *Handlers) MoveNotebookToStack(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "notebook id is required"})
+		return
+	}
+
+	var req struct {
+		Stack string `json:"stack"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if h.nasClient != nil && h.authClient != nil {
+		if !h.authClient.IsLoggedIn() {
+			h.reconnectNAS()
+		}
+		if h.authClient.IsLoggedIn() {
+			if err := h.nasClient.EditNotebook(id, "", req.Stack); err != nil {
+				log.Printf("[api] NAS move notebook %s to stack failed: %v", id, err)
+			}
+		}
+	}
+
+	ctx := context.Background()
+	var stackPtr *string
+	if req.Stack != "" {
+		stackPtr = &req.Stack
+	}
+	if err := h.notesStore.UpdateNotebookStack(ctx, id, stackPtr); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+// reconnectNAS tries to re-login to NAS using saved credentials.
+func (h *Handlers) reconnectNAS() bool {
+	if h.authClient == nil {
+		return false
+	}
+	username, _ := h.settingsStore.GetSetting("nas_username")
+	password, _ := h.settingsStore.GetSetting("nas_password_encrypted")
+	if username == "" || password == "" {
+		return false
+	}
+	if err := h.authClient.Login(username, password); err != nil {
+		log.Printf("[api] NAS auto-reconnect failed: %v", err)
+		return false
+	}
+	log.Printf("[api] NAS auto-reconnect succeeded")
+	return true
 }
 
 // listNotesResponse is the paginated response for listing notes.
